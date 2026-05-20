@@ -1,0 +1,12 @@
+{
+  "name": "@pickfix/bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/bridge.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

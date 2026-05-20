@@ -1,0 +1,19 @@
+{
+  "name": "@pickfix/proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pickfix/bridge": "workspace:*",
+    "http-proxy": "^1.18.1"
+  },
+  "devDependencies": {
+    "@types/http-proxy": "^1.17.15",
+    "tsx": "^4.19.0"
+  }
+}

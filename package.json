@@ -1,0 +1,14 @@
+{
+  "name": "pickfix",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Point, pick, fix — preview-driven development with AI",
+  "engines": {
+    "node": "~24"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "dev": "echo 'Use pnpm --filter to run individual packages. See README.'",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
