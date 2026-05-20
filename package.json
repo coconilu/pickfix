@@ -8,7 +8,14 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "echo 'Use pnpm --filter to run individual packages. See README.'",
+    "dev": "concurrently -n demo,proxy,web -c blue,green,cyan \"pnpm dev:demo\" \"pnpm dev:proxy\" \"pnpm dev:web\"",
+    "dev:demo": "pnpm --filter @pickfix/example-demo dev",
+    "dev:proxy": "pnpm --filter @pickfix/proxy dev",
+    "dev:web": "pnpm --filter @pickfix/web dev",
+    "dev:tmux": "./scripts/tmux-dev.sh && tmux attach -t pickfix",
     "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
   }
 }
