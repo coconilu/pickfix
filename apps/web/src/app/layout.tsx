@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "PickFix — Preview-Driven Development",
+  description: "Point, pick, fix — preview-driven development with AI",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -5,12 +13,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>PickFix — Preview-Driven Development</title>
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🔧</text></svg>" />
-      </head>
       <body>{children}</body>
     </html>
   );

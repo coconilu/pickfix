@@ -1,28 +1,30 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useSessionState, useSessionActions } from "@/providers/session";
 import { PickedElement } from "./PickedElement";
 import { streamAgentResponse } from "@/lib/agent";
-import type { ElementMeta, ChatMessage } from "@/lib/bridge-protocol";
-
-/** Mock project files for the MVP agent context. */
-const MOCK_PROJECT_FILES: Record<string, string> = {};
+import type { ChatMessage } from "@/lib/bridge-protocol";
 
 export function ChatPanel() {
   const { messages, pickedElements, activeElement, isStreaming } =
     useSessionState();
-  const { addMessage, appendToLastAssistant, setStreaming, clearPickedElements } =
+  const { addMessage, appendToLastAssistant, setStreaming, clearPickedElements, removePickedElement } =
     useSessionActions();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // Track latest messages via ref to avoid stale closures
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const pickedElementsRef = useRef(pickedElements);
+  pickedElementsRef.current = pickedElements;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     const input = inputRef.current;
     if (!input || !input.value.trim() || isStreaming) return;
 
@@ -30,13 +32,11 @@ export function ChatPanel() {
     input.value = "";
     input.style.height = "auto";
 
-    // Get the last picked element as context
     const lastPicked =
-      pickedElements.length > 0
-        ? pickedElements[pickedElements.length - 1]
+      pickedElementsRef.current.length > 0
+        ? pickedElementsRef.current[pickedElementsRef.current.length - 1]
         : null;
 
-    // Add user message
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
@@ -45,7 +45,6 @@ export function ChatPanel() {
     };
     addMessage(userMsg);
 
-    // Add placeholder assistant message
     const assistantMsg: ChatMessage = {
       id: `assistant-${Date.now()}`,
       role: "assistant",
@@ -54,27 +53,32 @@ export function ChatPanel() {
     addMessage(assistantMsg);
     setStreaming(true);
 
-    // Stream agent response
+    // Use ref to get latest messages (avoids stale closure)
+    const currentMessages = messagesRef.current;
+
     await streamAgentResponse(
       {
-        messages,
+        messages: currentMessages,
         pickedElement: lastPicked,
         userMessage: userText,
-        projectFiles: MOCK_PROJECT_FILES,
+        projectFiles: {},
       },
       (chunk) => appendToLastAssistant(chunk),
     );
 
     setStreaming(false);
     clearPickedElements();
-  };
+  }, [isStreaming, addMessage, appendToLastAssistant, setStreaming, clearPickedElements]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend],
+  );
 
   return (
     <div className="chat-panel">
@@ -87,30 +91,23 @@ export function ChatPanel() {
         </span>
       </div>
 
-      {/* Picked elements bar */}
       {pickedElements.length > 0 && (
         <div className="chat-picked-bar">
           {pickedElements.map((el) => (
             <PickedElement
               key={el.elementId}
               element={el}
-              onRemove={() => {
-                // handled in parent
-              }}
+              onRemove={() => removePickedElement(el.elementId)}
             />
           ))}
         </div>
       )}
 
-      {/* Messages */}
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
             <div className="chat-empty-icon">☝️</div>
-            <p>
-              Click elements in the preview to pick them, then describe what you
-              want to change.
-            </p>
+            <p>Click elements in the preview to pick them, then describe what you want to change.</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -124,7 +121,7 @@ export function ChatPanel() {
                 {msg.pickedElement.classes
                   ? `.${msg.pickedElement.classes.split(/\s+/)[0]}`
                   : ""}{" "}
-                — "{msg.pickedElement.text.slice(0, 40)}"
+                — &quot;{msg.pickedElement.text.slice(0, 40)}&quot;
               </div>
             )}
             <div className="chat-message-content">
@@ -135,7 +132,6 @@ export function ChatPanel() {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input */}
       <div className="chat-input-area">
         <textarea
           ref={inputRef}

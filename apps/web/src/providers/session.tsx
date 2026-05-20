@@ -4,23 +4,18 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import type { ElementMeta, ChatMessage } from "@/lib/bridge-protocol";
 
 export interface SessionState {
-  /** Whether element picking mode is active */
   pickMode: boolean;
-  /** The currently picked/hovered element */
   activeElement: ElementMeta | null;
-  /** All picked elements in this session */
   pickedElements: ElementMeta[];
-  /** Chat messages */
   messages: ChatMessage[];
-  /** Preview proxy URL */
   previewUrl: string;
-  /** Whether the agent is streaming a response */
   isStreaming: boolean;
 }
 
@@ -74,16 +69,12 @@ export function SessionProvider({
     setState((s) => ({
       ...s,
       pickedElements: s.pickedElements.filter((p) => p.elementId !== elementId),
-      activeElement:
-        s.activeElement?.elementId === elementId ? null : s.activeElement,
+      activeElement: s.activeElement?.elementId === elementId ? null : s.activeElement,
     }));
   }, []);
 
   const addMessage = useCallback((msg: ChatMessage) => {
-    setState((s) => ({
-      ...s,
-      messages: [...s.messages, msg],
-    }));
+    setState((s) => ({ ...s, messages: [...s.messages, msg] }));
   }, []);
 
   const appendToLastAssistant = useCallback((chunk: string) => {
@@ -105,16 +96,29 @@ export function SessionProvider({
     setState((s) => ({ ...s, pickedElements: [], activeElement: null }));
   }, []);
 
-  const actions: SessionActions = {
-    setPickMode,
-    setActiveElement,
-    addPickedElement,
-    removePickedElement,
-    addMessage,
-    appendToLastAssistant,
-    setStreaming,
-    clearPickedElements,
-  };
+  // Memoize the actions object so consumers don't re-render on every state change.
+  const actions = useMemo<SessionActions>(
+    () => ({
+      setPickMode,
+      setActiveElement,
+      addPickedElement,
+      removePickedElement,
+      addMessage,
+      appendToLastAssistant,
+      setStreaming,
+      clearPickedElements,
+    }),
+    [
+      setPickMode,
+      setActiveElement,
+      addPickedElement,
+      removePickedElement,
+      addMessage,
+      appendToLastAssistant,
+      setStreaming,
+      clearPickedElements,
+    ],
+  );
 
   return (
     <SessionStateCtx.Provider value={state}>

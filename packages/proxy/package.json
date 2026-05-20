@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx src/server.ts",
+    "dev": "NODE_OPTIONS=\"--no-deprecation\" tsx src/server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
