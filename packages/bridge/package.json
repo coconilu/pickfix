@@ -7,6 +7,10 @@
     ".": "./src/bridge.ts"
   },
   "scripts": {
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "vitest": "^3.1.0"
   }
 }

@@ -96,7 +96,8 @@ export function PreviewPanel() {
           <button
             className="preview-btn-reload"
             onClick={() => {
-              iframeRef.current?.contentWindow?.location.reload();
+              const iframe = iframeRef.current;
+              if (iframe) iframe.src = iframe.src;
             }}
             title="Reload preview"
           >

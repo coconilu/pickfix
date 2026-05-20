@@ -8,7 +8,7 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "predev": "lsof -ti :3000 | xargs kill -9 2>/dev/null; lsof -ti :4000 | xargs kill -9 2>/dev/null; lsof -ti :3001 | xargs kill -9 2>/dev/null; true",
+    "predev": "lsof -ti :3000 | xargs kill -9 2>/dev/null; lsof -ti :4000 | xargs kill -9 2>/dev/null; lsof -ti :3001 | xargs kill -9 2>/dev/null; rm -rf examples/demo/.next apps/web/.next 2>/dev/null; true",
     "dev": "concurrently --kill-others -n demo,proxy,web -c blue,green,cyan \"pnpm dev:demo\" \"pnpm dev:proxy\" \"pnpm dev:web\"",
     "dev:demo": "pnpm --filter @pickfix/example-demo dev",
     "dev:proxy": "until curl -s --noproxy '*' -o /dev/null http://localhost:3000 2>/dev/null; do sleep 0.5; done; pnpm --filter @pickfix/proxy dev",
