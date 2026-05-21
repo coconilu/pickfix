@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyBridgeMessageToPreviewState,
   elementMetaFromBridgeMessage,
+  isTrustedBridgeMessageEvent,
+  targetOriginForPreviewUrl,
 } from "./PreviewPanel";
 import type { BridgeMessage } from "@/lib/bridge-protocol";
 
@@ -18,6 +20,44 @@ const pickMessage: Extract<BridgeMessage, { type: "od:pf-pick" }> = {
 };
 
 describe("PreviewPanel bridge message helpers", () => {
+  it("derives a strict target origin from the preview URL", () => {
+    expect(targetOriginForPreviewUrl("http://localhost:4000/path?q=1")).toBe(
+      "http://localhost:4000",
+    );
+    expect(targetOriginForPreviewUrl("not a url")).toBe("");
+  });
+
+  it("accepts messages only from the current iframe window and preview origin", () => {
+    const iframeWindow = {} as Window;
+
+    expect(
+      isTrustedBridgeMessageEvent({
+        eventSource: iframeWindow,
+        eventOrigin: "http://localhost:4000",
+        iframeWindow,
+        previewUrl: "http://localhost:4000",
+      }),
+    ).toBe(true);
+
+    expect(
+      isTrustedBridgeMessageEvent({
+        eventSource: {} as Window,
+        eventOrigin: "http://localhost:4000",
+        iframeWindow,
+        previewUrl: "http://localhost:4000",
+      }),
+    ).toBe(false);
+
+    expect(
+      isTrustedBridgeMessageEvent({
+        eventSource: iframeWindow,
+        eventOrigin: "https://evil.test",
+        iframeWindow,
+        previewUrl: "http://localhost:4000",
+      }),
+    ).toBe(false);
+  });
+
   it("maps bridge payloads to ElementMeta", () => {
     expect(elementMetaFromBridgeMessage(pickMessage)).toEqual({
       elementId: "cta-button",

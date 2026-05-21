@@ -10,6 +10,31 @@ export interface PreviewBridgeActions {
   addPickedElement: (el: ElementMeta) => void;
 }
 
+export function targetOriginForPreviewUrl(previewUrl: string): string {
+  try {
+    return new URL(previewUrl).origin;
+  } catch {
+    return "";
+  }
+}
+
+export function isTrustedBridgeMessageEvent({
+  eventSource,
+  eventOrigin,
+  iframeWindow,
+  previewUrl,
+}: {
+  eventSource: MessageEvent["source"];
+  eventOrigin: string;
+  iframeWindow: Window | null | undefined;
+  previewUrl: string;
+}): boolean {
+  if (!iframeWindow || eventSource !== iframeWindow) return false;
+  const expectedOrigin = targetOriginForPreviewUrl(previewUrl);
+  if (!expectedOrigin) return false;
+  return eventOrigin === expectedOrigin;
+}
+
 export function elementMetaFromBridgeMessage(
   data: Extract<BridgeMessage, { type: "od:pf-hover" | "od:pf-pick" }>,
 ): ElementMeta {
@@ -68,6 +93,15 @@ export function PreviewPanel() {
   // Handle messages from the bridge inside the iframe
   const handleMessage = useCallback(
     (ev: MessageEvent) => {
+      if (!isTrustedBridgeMessageEvent({
+        eventSource: ev.source,
+        eventOrigin: ev.origin,
+        iframeWindow: iframeRef.current?.contentWindow,
+        previewUrl,
+      })) {
+        return;
+      }
+
       const data = ev.data as BridgeMessage | null;
       if (!data || typeof data.type !== "string") return;
 
@@ -77,7 +111,7 @@ export function PreviewPanel() {
         addPickedElement,
       });
     },
-    [setActiveElement, addPickedElement, setPickMode],
+    [previewUrl, setActiveElement, addPickedElement, setPickMode],
   );
 
   useEffect(() => {
@@ -88,11 +122,13 @@ export function PreviewPanel() {
   // Send pick mode state to the iframe bridge
   useEffect(() => {
     if (!iframeReady) return;
+    const targetOrigin = targetOriginForPreviewUrl(previewUrl);
+    if (!targetOrigin) return;
     iframeRef.current?.contentWindow?.postMessage(
       { type: "od:pf-mode", enabled: pickMode },
-      "*",
+      targetOrigin,
     );
-  }, [pickMode, iframeReady]);
+  }, [pickMode, iframeReady, previewUrl]);
 
   const handleAddressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {

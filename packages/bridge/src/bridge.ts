@@ -144,10 +144,18 @@ export const BRIDGE_SCRIPT = `
     };
   }
 
+  function parentOrigin() {
+    try {
+      return document.referrer ? new URL(document.referrer).origin : '*';
+    } catch (_) {
+      return '*';
+    }
+  }
+
   function post(type, payload) {
     try {
       var msg = Object.assign({ type: type }, payload);
-      window.parent.postMessage(msg, '*');
+      window.parent.postMessage(msg, parentOrigin());
     } catch (_) {}
   }
 
@@ -224,6 +232,9 @@ export const BRIDGE_SCRIPT = `
     var data = ev && ev.data;
     if (!data || !data.type) return;
     if (data.type === 'od:pf-mode') {
+      if (ev.source && ev.source !== window.parent) return;
+      var expectedOrigin = parentOrigin();
+      if (expectedOrigin !== '*' && ev.origin !== expectedOrigin) return;
       enabled = !!data.enabled;
       document.documentElement.toggleAttribute('data-pf-mode', enabled);
       if (!enabled) {

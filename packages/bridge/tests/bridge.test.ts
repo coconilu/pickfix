@@ -74,7 +74,9 @@ class FakeElement {
   }
 }
 
-function createBridgeHarness() {
+const HOST_ORIGIN = "http://localhost:3001";
+
+function createBridgeHarness({ referrer = `${HOST_ORIGIN}/` } = {}) {
   const documentListeners = new Map<string, Listener[]>();
   const windowListeners = new Map<string, Listener[]>();
   const html = new FakeElement("html");
@@ -87,6 +89,7 @@ function createBridgeHarness() {
     documentElement: html,
     head,
     body,
+    referrer,
     createElement: (tag: string) => new FakeElement(tag),
     addEventListener: (type: string, listener: Listener) => {
       documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]);
@@ -111,11 +114,12 @@ function createBridgeHarness() {
     for (const listener of windowListeners.get(type) ?? []) listener(event);
   };
   const enablePickMode = () => {
-    dispatchWindow("message", { data: { type: "od:pf-mode", enabled: true } });
+    dispatchWindow("message", { source: window.parent, origin: HOST_ORIGIN, data: { type: "od:pf-mode", enabled: true } });
   };
 
   return {
     document,
+    window,
     html,
     body,
     postMessage,
@@ -148,10 +152,26 @@ describe("pick mode", () => {
   it("toggles the data-pf-mode attribute from host messages", () => {
     const h = createBridgeHarness();
 
-    h.dispatchWindow("message", { data: { type: "od:pf-mode", enabled: true } });
+    h.dispatchWindow("message", { source: h.window.parent, origin: HOST_ORIGIN, data: { type: "od:pf-mode", enabled: true } });
     expect(h.html.hasAttribute("data-pf-mode")).toBe(true);
 
-    h.dispatchWindow("message", { data: { type: "od:pf-mode", enabled: false } });
+    h.dispatchWindow("message", { source: h.window.parent, origin: HOST_ORIGIN, data: { type: "od:pf-mode", enabled: false } });
+    expect(h.html.hasAttribute("data-pf-mode")).toBe(false);
+  });
+
+  it("ignores pick-mode messages from a non-parent window", () => {
+    const h = createBridgeHarness();
+
+    h.dispatchWindow("message", { source: {}, origin: HOST_ORIGIN, data: { type: "od:pf-mode", enabled: true } });
+
+    expect(h.html.hasAttribute("data-pf-mode")).toBe(false);
+  });
+
+  it("ignores pick-mode messages from a non-parent origin", () => {
+    const h = createBridgeHarness();
+
+    h.dispatchWindow("message", { origin: "https://evil.test", data: { type: "od:pf-mode", enabled: true } });
+
     expect(h.html.hasAttribute("data-pf-mode")).toBe(false);
   });
 
@@ -194,7 +214,7 @@ describe("hover behavior", () => {
         rect: { x: 12, y: 21, width: 130, height: 44 },
         style: expect.objectContaining({ fontSize: "16px" }),
       }),
-      "*",
+      HOST_ORIGIN,
     );
 
     const overlay = h.body.children.find((child) => child.getAttribute("id") === "__pf-highlight-overlay");
@@ -246,7 +266,7 @@ describe("click behavior", () => {
         tag: "a",
         selector: "body > a:nth-of-type(2)",
       }),
-      "*",
+      HOST_ORIGIN,
     );
   });
 });
@@ -258,6 +278,6 @@ describe("leave behavior", () => {
 
     h.dispatchDocument("mouseout", { target: null });
 
-    expect(h.postMessage).toHaveBeenCalledWith({ type: "od:pf-leave" }, "*");
+    expect(h.postMessage).toHaveBeenCalledWith({ type: "od:pf-leave" }, HOST_ORIGIN);
   });
 });
