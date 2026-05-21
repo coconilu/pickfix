@@ -6,14 +6,14 @@
 # Install
 pnpm install
 
-# Start everything (demo → proxy → web, in order)
-pnpm dev                             # concurrent with health-check ordering
-pnpm dev:tmux                        # same but in 3 tmux panes
+# Start everything (target → proxy → web, in order)
+pnpm dev                             # uses CLI with examples/demo as external target
+pnpm pickfix -- --project ../my-app --dev 'pnpm dev' --port 5678
 
 # Run a single service (upstream must already be running)
-pnpm --filter @pickfix/example-demo dev    # port 3000
-pnpm --filter @pickfix/proxy dev          # port 4000 (needs :3000)
-pnpm --filter @pickfix/web dev            # port 3001 (needs :4000)
+PORT=5678 pnpm --filter @pickfix/example-demo dev  # official external project example
+PF_TARGET_URL=http://localhost:5678 pnpm --filter @pickfix/proxy dev  # port 4000
+pnpm --filter @pickfix/web dev                      # port 3001 (needs :4000)
 
 # Typecheck all packages
 pnpm typecheck   # alias for pnpm -r typecheck
@@ -22,7 +22,7 @@ pnpm typecheck   # alias for pnpm -r typecheck
 pnpm check
 
 # Run tests
-pnpm test        # bridge + proxy
+pnpm test        # bridge + proxy + web
 # Or single package:
 pnpm --filter @pickfix/bridge test
 pnpm --filter @pickfix/proxy test
@@ -33,7 +33,7 @@ pnpm --filter @pickfix/proxy test
 ```
 browser → web UI (Next.js 16, :3001)
             ├── ChatPanel    ← AI SDK v4 (streamText + @ai-sdk/openai)
-            ├── PreviewPanel  → iframe → proxy (:4000) → target app (:3000)
+            ├── PreviewPanel  → iframe → proxy (:4000) → target app (:5678)
             └── StatusPanel
 
 proxy interceptor (:4000) — pure Node.js, zero deps:
@@ -50,10 +50,10 @@ bridge (packages/bridge) — pure JS IIFE, exported as a string constant:
 
 ## Service startup order
 
-The three services have a dependency chain. The root `pnpm dev` script handles this via `concurrently` with health checks (`curl` polling). If running services individually:
+The three services have a dependency chain. The root `pnpm dev` script uses `@pickfix/cli` to start the target project, wait for it, then start proxy and web. By default it treats `examples/demo` as the official external project example:
 
-1. `pnpm --filter @pickfix/example-demo dev` (port 3000)
-2. `pnpm --filter @pickfix/proxy dev` (port 4000 — needs :3000 responding)
+1. `PORT=5678 pnpm --filter @pickfix/example-demo dev` (target project, port 5678)
+2. `PF_TARGET_URL=http://localhost:5678 pnpm --filter @pickfix/proxy dev` (port 4000 — needs :5678 responding)
 3. `pnpm --filter @pickfix/web dev` (port 3001 — needs :4000 responding)
 
 The proxy needs the target app already serving before it starts.
@@ -62,12 +62,13 @@ The proxy needs the target app already serving before it starts.
 
 ```
 packages/
+  cli/        @pickfix/cli       — starts external project, proxy, and web with env wiring
   bridge/     @pickfix/bridge    — IIFE string export, no deps, vitest tests
   proxy/      @pickfix/proxy     — HTTP/WS proxy, depends on bridge (workspace:*)
 apps/
   web/        @pickfix/web       — Next.js 16 + React 18 App Router, AI SDK v4
 examples/
-  demo/       @pickfix/example-demo  — Target app users modify
+  demo/       @pickfix/example-demo  — official external project example
 ```
 
 ## Environment
@@ -78,10 +79,11 @@ examples/
 
 ## Testing
 
-- **No root test script**. Tests exist only in `packages/bridge` and `packages/proxy`.
+- Root `pnpm test` runs bridge, proxy, and web tests.
 - **Vitest** with no config file — uses defaults. Run from package directory or via `--filter`.
 - **Bridge tests** (`packages/bridge/tests/bridge.test.ts`): string-matching on the IIFE export. They assert the `BRIDGE_SCRIPT` string contains expected substrings, not DOM simulation. Use `callBridgeFn()` helper if you need to actually invoke a function from the IIFE.
 - **Proxy tests** (`packages/proxy/tests/proxy.test.ts`): spin up real HTTP servers on ports 14003 (target) and 14004 (proxy). Tests verify HTML injection, bridge serving, CSP/CORS header manipulation, and streamed response handling.
+- **Web tests** (`apps/web/src/**/*.test.ts`): cover session state and key PreviewPanel/ChatPanel behavior.
 
 ## TypeScript
 
@@ -103,7 +105,7 @@ examples/
 - Bridge is a single `BRIDGE_SCRIPT` string constant — never split into separate exports
 - The proxy injects the bridge `<script>` before `</head>` (falls back to before `<body>` if no `</head>`)
 - Agent prompt format uses ` ```file:path/to/file ` fenced code blocks for file changes
-- `pnpm predev` kills any lingering processes on ports 3000/4000/3001 and cleans `.next` dirs
+- `pnpm predev` kills any lingering processes on ports 5678/4000/3001 and cleans `.next` dirs
 
 ## What doesn't exist yet
 

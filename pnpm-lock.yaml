@@ -71,6 +71,15 @@ importers:
         specifier: ^3.1.0
         version: 3.2.4(@types/node@25.9.1)(tsx@4.22.3)
 
+  packages/cli:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/proxy:
     dependencies:
       '@pickfix/bridge':

@@ -17,7 +17,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function buildPrompt(ctx: AgentRequest, repoRoot: string): string {
+function buildPrompt(ctx: AgentRequest, projectRoot: string): string {
   const picked = ctx.pickedElement;
   const priorMessages = (ctx.messages ?? [])
     .filter((m) => m.role !== "system" && m.content.trim().length > 0)
@@ -28,18 +28,15 @@ function buildPrompt(ctx: AgentRequest, repoRoot: string): string {
   return `You are PickFix, a local coding agent running through Claude Code.
 
 PROJECT:
-- Repository root: ${repoRoot}
-- Main target app: examples/demo
-- Web UI: apps/web
-- Proxy: packages/proxy
-- Bridge: packages/bridge
+- Target project root: ${projectRoot}
+- PickFix itself is tooling. Unless the user explicitly asks to change PickFix, inspect and modify files under the target project root.
 
 TASK:
 The user is looking at the live preview and asks for a code change. Inspect and modify files directly when needed. Keep changes minimal and consistent with the existing codebase.
 
 RULES:
 1. Prefer modifying the actual source files instead of only describing changes.
-2. If the picked element clearly belongs to the demo preview, start by inspecting examples/demo/src/app/page.tsx.
+2. Start by inspecting the target project's source files that most likely render the picked element.
 3. Preserve the existing style and avoid broad refactors unless requested.
 4. After editing, briefly summarize what changed and which files were touched.
 5. If you cannot safely make a change, explain the blocker and the exact next step.
@@ -106,7 +103,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const claudeBin = process.env.CLAUDE_BIN || "claude";
-  const cwd = process.env.PF_AGENT_CWD || path.resolve(process.cwd(), "../..");
+  const cwd = process.env.PF_AGENT_CWD || process.env.PICKFIX_PROJECT_ROOT || path.resolve(process.cwd());
   const prompt = buildPrompt({ ...body, userMessage }, cwd);
   let child: ReturnType<typeof spawn> | null = null;
 

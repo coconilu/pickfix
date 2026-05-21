@@ -30,7 +30,7 @@ browser → web UI (Next.js :3001)
               ├── Preview Panel (iframe :4000)  ←→  bridge (postMessage)
               └── Status Panel
 
-iframe → proxy (:4000) → target app (:3000)
+iframe → proxy (:4000) → external target app (:5678 by default)
               │
               ├── HTML interception → inject bridge script
               ├── WebSocket proxy → HMR
@@ -43,17 +43,15 @@ iframe → proxy (:4000) → target app (:3000)
 # 1. Install dependencies
 pnpm install
 
-# 2. Start the example app (the target to modify)
-pnpm --filter @pickfix/example-demo dev
-# → http://localhost:3000
-
-# 3. Start the preview proxy (injects element picking into the app)
-pnpm --filter @pickfix/proxy dev
-# → http://localhost:4000
-
-# 4. Start the PickFix UI
-pnpm --filter @pickfix/web dev
+# 2. Start PickFix with the official demo as an external target
+pnpm dev
 # → http://localhost:3001
+```
+
+To connect a separate project instead of the demo:
+
+```bash
+pnpm pickfix -- --project ../my-app --dev 'pnpm dev' --port 5678
 ```
 
 Open **http://localhost:3001** and you'll see the three-panel layout:
@@ -100,13 +98,16 @@ The proxy intercepts `text/html` responses from the target dev server and inject
 ```
 pickfix/
 ├── packages/
+│   ├── cli/          # Starts external project → proxy → web
 │   ├── bridge/       # Selection bridge script (injected into iframe)
 │   └── proxy/        # Reverse proxy with HTML injection + WS support
 ├── apps/
 │   └── web/          # Three-panel UI (Next.js 16 + React 18)
 └── examples/
-    └── demo/         # Example Next.js landing page to modify
+    └── demo/         # Official external-project example
 ```
+
+See [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) for the external-project model and minimal-intrusion notes.
 
 ## Roadmap
 
