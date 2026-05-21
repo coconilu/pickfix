@@ -4,7 +4,66 @@ import { useRef, useEffect, useCallback } from "react";
 import { useSessionState, useSessionActions } from "@/providers/session";
 import { PickedElement } from "./PickedElement";
 import { streamAgentResponse } from "@/lib/agent";
-import type { ChatMessage } from "@/lib/bridge-protocol";
+import type { ChatMessage, ElementMeta } from "@/lib/bridge-protocol";
+
+interface ChatTurnActions {
+  addMessage: (msg: ChatMessage) => void;
+  appendToLastAssistant: (chunk: string) => void;
+  setStreaming: (value: boolean) => void;
+  clearPickedElements: () => void;
+}
+
+export async function runChatTurn({
+  userText,
+  currentMessages,
+  pickedElements,
+  actions,
+  streamAgentResponseImpl = streamAgentResponse,
+}: {
+  userText: string;
+  currentMessages: ChatMessage[];
+  pickedElements: ElementMeta[];
+  actions: ChatTurnActions;
+  streamAgentResponseImpl?: typeof streamAgentResponse;
+}): Promise<void> {
+  const lastPicked =
+    pickedElements.length > 0 ? pickedElements[pickedElements.length - 1] : null;
+
+  const userMsg: ChatMessage = {
+    id: `user-${Date.now()}`,
+    role: "user",
+    content: userText,
+    pickedElement: lastPicked,
+  };
+  actions.addMessage(userMsg);
+
+  const assistantMsg: ChatMessage = {
+    id: `assistant-${Date.now()}`,
+    role: "assistant",
+    content: "",
+  };
+  actions.addMessage(assistantMsg);
+  actions.setStreaming(true);
+
+  try {
+    await streamAgentResponseImpl(
+      {
+        messages: currentMessages,
+        pickedElement: lastPicked,
+        userMessage: userText,
+        projectFiles: {},
+      },
+      (chunk) => actions.appendToLastAssistant(chunk),
+    );
+  } catch (error) {
+    actions.appendToLastAssistant(
+      `⚠️ Agent request failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  } finally {
+    actions.setStreaming(false);
+    actions.clearPickedElements();
+  }
+}
 
 export function ChatPanel() {
   const { messages, pickedElements, activeElement, isStreaming } =
@@ -32,48 +91,20 @@ export function ChatPanel() {
     input.value = "";
     input.style.height = "auto";
 
-    const lastPicked =
-      pickedElementsRef.current.length > 0
-        ? pickedElementsRef.current[pickedElementsRef.current.length - 1]
-        : null;
-
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: userText,
-      pickedElement: lastPicked,
-    };
-    addMessage(userMsg);
-
-    const assistantMsg: ChatMessage = {
-      id: `assistant-${Date.now()}`,
-      role: "assistant",
-      content: "",
-    };
-    addMessage(assistantMsg);
-    setStreaming(true);
-
     // Use ref to get latest messages (avoids stale closure)
     const currentMessages = messagesRef.current;
 
-    try {
-      await streamAgentResponse(
-        {
-          messages: currentMessages,
-          pickedElement: lastPicked,
-          userMessage: userText,
-          projectFiles: {},
-        },
-        (chunk) => appendToLastAssistant(chunk),
-      );
-    } catch (error) {
-      appendToLastAssistant(
-        `⚠️ Agent request failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    } finally {
-      setStreaming(false);
-      clearPickedElements();
-    }
+    await runChatTurn({
+      userText,
+      currentMessages,
+      pickedElements: pickedElementsRef.current,
+      actions: {
+        addMessage,
+        appendToLastAssistant,
+        setStreaming,
+        clearPickedElements,
+      },
+    });
   }, [isStreaming, addMessage, appendToLastAssistant, setStreaming, clearPickedElements]);
 
   const handleKeyDown = useCallback(

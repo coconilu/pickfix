@@ -15,7 +15,7 @@
     "dev:web": "until curl -s --noproxy '*' -o /dev/null http://localhost:4000 2>/dev/null; do sleep 0.5; done; pnpm --filter @pickfix/web dev",
     "dev:tmux": "./scripts/tmux-dev.sh && tmux attach -t pickfix",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @pickfix/bridge test && pnpm --filter @pickfix/proxy test",
+    "test": "pnpm --filter @pickfix/bridge test && pnpm --filter @pickfix/proxy test && pnpm --filter @pickfix/web test",
     "check": "pnpm typecheck && pnpm test"
   },
   "devDependencies": {

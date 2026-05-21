@@ -4,6 +4,50 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useSessionState, useSessionActions } from "@/providers/session";
 import type { BridgeMessage, ElementMeta } from "@/lib/bridge-protocol";
 
+export interface PreviewBridgeActions {
+  setPickMode: (enabled: boolean) => void;
+  setActiveElement: (el: ElementMeta | null) => void;
+  addPickedElement: (el: ElementMeta) => void;
+}
+
+export function elementMetaFromBridgeMessage(
+  data: Extract<BridgeMessage, { type: "od:pf-hover" | "od:pf-pick" }>,
+): ElementMeta {
+  return {
+    elementId: data.elementId,
+    tag: data.tag,
+    id: data.id,
+    classes: data.classes,
+    text: data.text,
+    rect: data.rect,
+    selector: data.selector,
+    htmlHint: data.htmlHint,
+    style: null,
+  };
+}
+
+export function applyBridgeMessageToPreviewState(
+  data: BridgeMessage,
+  actions: PreviewBridgeActions,
+): void {
+  switch (data.type) {
+    case "od:pf-hover": {
+      actions.setActiveElement(elementMetaFromBridgeMessage(data));
+      break;
+    }
+    case "od:pf-pick": {
+      const el = elementMetaFromBridgeMessage(data);
+      actions.addPickedElement(el);
+      actions.setActiveElement(el);
+      actions.setPickMode(false);
+      break;
+    }
+    case "od:pf-leave":
+      actions.setActiveElement(null);
+      break;
+  }
+}
+
 export function PreviewPanel() {
   const { previewUrl, pickMode } = useSessionState();
   const { setPickMode, setActiveElement, addPickedElement, setPreviewUrl } =
@@ -27,43 +71,11 @@ export function PreviewPanel() {
       const data = ev.data as BridgeMessage | null;
       if (!data || typeof data.type !== "string") return;
 
-      switch (data.type) {
-        case "od:pf-hover": {
-          const el: ElementMeta = {
-            elementId: data.elementId,
-            tag: data.tag,
-            id: data.id,
-            classes: data.classes,
-            text: data.text,
-            rect: data.rect,
-            selector: data.selector,
-            htmlHint: data.htmlHint,
-            style: null,
-          };
-          setActiveElement(el);
-          break;
-        }
-        case "od:pf-pick": {
-          const el: ElementMeta = {
-            elementId: data.elementId,
-            tag: data.tag,
-            id: data.id,
-            classes: data.classes,
-            text: data.text,
-            rect: data.rect,
-            selector: data.selector,
-            htmlHint: data.htmlHint,
-            style: null,
-          };
-          addPickedElement(el);
-          setActiveElement(el);
-          setPickMode(false);
-          break;
-        }
-        case "od:pf-leave":
-          setActiveElement(null);
-          break;
-      }
+      applyBridgeMessageToPreviewState(data, {
+        setPickMode,
+        setActiveElement,
+        addPickedElement,
+      });
     },
     [setActiveElement, addPickedElement, setPickMode],
   );
