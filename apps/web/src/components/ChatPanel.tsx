@@ -56,18 +56,24 @@ export function ChatPanel() {
     // Use ref to get latest messages (avoids stale closure)
     const currentMessages = messagesRef.current;
 
-    await streamAgentResponse(
-      {
-        messages: currentMessages,
-        pickedElement: lastPicked,
-        userMessage: userText,
-        projectFiles: {},
-      },
-      (chunk) => appendToLastAssistant(chunk),
-    );
-
-    setStreaming(false);
-    clearPickedElements();
+    try {
+      await streamAgentResponse(
+        {
+          messages: currentMessages,
+          pickedElement: lastPicked,
+          userMessage: userText,
+          projectFiles: {},
+        },
+        (chunk) => appendToLastAssistant(chunk),
+      );
+    } catch (error) {
+      appendToLastAssistant(
+        `⚠️ Agent request failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setStreaming(false);
+      clearPickedElements();
+    }
   }, [isStreaming, addMessage, appendToLastAssistant, setStreaming, clearPickedElements]);
 
   const handleKeyDown = useCallback(
