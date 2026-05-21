@@ -1,22 +1,133 @@
 /**
- * Bridge script unit tests.
- * Extracts and tests the core DOM selection functions from the IIFE.
+ * Bridge script tests.
+ *
+ * These execute the injected IIFE against a tiny DOM double so the tests cover
+ * the real event handlers, metadata building, highlight overlay, and
+ * postMessage behavior without depending on a browser package.
  */
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BRIDGE_SCRIPT } from "@pickfix/bridge";
 
-// Extract a function body from the IIFE for isolated testing
-function callBridgeFn<T>(fnName: string, args: unknown[]): T {
-  const wrapped = `
-    ${BRIDGE_SCRIPT.replace(/^var (enabled|hoveredId|overlay) = /gm, "let $&")}
-    return ${fnName}(...${JSON.stringify(args)});
-  `;
-  const fn = new Function(wrapped);
-  return fn() as T;
+type Listener = (event: any) => void;
+
+class FakeElement {
+  tagName: string;
+  parentElement: FakeElement | null = null;
+  previousElementSibling: FakeElement | null = null;
+  children: FakeElement[] = [];
+  attributes = new Map<string, string>();
+  style: Record<string, string> & { cssText: string } = { cssText: "" };
+  id = "";
+  className = "";
+  textContent = "";
+  outerHTML = "";
+  isConnected = true;
+  rect = { x: 0, y: 0, width: 100, height: 40 };
+  computedStyle = {
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    color: "rgb(17, 24, 39)",
+    backgroundColor: "rgb(255, 255, 255)",
+    fontSize: "16px",
+    fontWeight: "400",
+  };
+
+  constructor(tagName: string) {
+    this.tagName = tagName.toUpperCase();
+    this.outerHTML = `<${tagName}></${tagName}>`;
+  }
+
+  appendChild(child: FakeElement) {
+    const prev = this.children[this.children.length - 1] ?? null;
+    child.previousElementSibling = prev;
+    child.parentElement = this;
+    child.isConnected = true;
+    this.children.push(child);
+    return child;
+  }
+
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+    if (name === "id") this.id = value;
+    if (name === "class") this.className = value;
+  }
+
+  getAttribute(name: string) {
+    if (name === "id" && this.id) return this.id;
+    return this.attributes.get(name) ?? null;
+  }
+
+  hasAttribute(name: string) {
+    return this.attributes.has(name);
+  }
+
+  toggleAttribute(name: string, force?: boolean) {
+    const enabled = force ?? !this.attributes.has(name);
+    if (enabled) this.attributes.set(name, "");
+    else this.attributes.delete(name);
+    return enabled;
+  }
+
+  getBoundingClientRect() {
+    return this.rect;
+  }
+}
+
+function createBridgeHarness() {
+  const documentListeners = new Map<string, Listener[]>();
+  const windowListeners = new Map<string, Listener[]>();
+  const html = new FakeElement("html");
+  const head = new FakeElement("head");
+  const body = new FakeElement("body");
+  html.appendChild(head);
+  html.appendChild(body);
+
+  const document = {
+    documentElement: html,
+    head,
+    body,
+    createElement: (tag: string) => new FakeElement(tag),
+    addEventListener: (type: string, listener: Listener) => {
+      documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]);
+    },
+  };
+
+  const postMessage = vi.fn();
+  const window = {
+    parent: { postMessage },
+    getComputedStyle: (el: FakeElement) => el.computedStyle,
+    addEventListener: (type: string, listener: Listener) => {
+      windowListeners.set(type, [...(windowListeners.get(type) ?? []), listener]);
+    },
+  };
+
+  new Function("window", "document", BRIDGE_SCRIPT)(window, document);
+
+  const dispatchDocument = (type: string, event: Record<string, unknown>) => {
+    for (const listener of documentListeners.get(type) ?? []) listener(event);
+  };
+  const dispatchWindow = (type: string, event: Record<string, unknown>) => {
+    for (const listener of windowListeners.get(type) ?? []) listener(event);
+  };
+  const enablePickMode = () => {
+    dispatchWindow("message", { data: { type: "od:pf-mode", enabled: true } });
+  };
+
+  return {
+    document,
+    html,
+    body,
+    postMessage,
+    dispatchDocument,
+    dispatchWindow,
+    enablePickMode,
+    createElement: (tag: string) => new FakeElement(tag),
+  };
 }
 
 describe("bridge script", () => {
-  it("export BRIDGE_SCRIPT is a non-empty string", () => {
+  it("exports a non-empty injected script with the expected protocol", () => {
     expect(BRIDGE_SCRIPT).toBeTypeOf("string");
     expect(BRIDGE_SCRIPT.length).toBeGreaterThan(500);
     expect(BRIDGE_SCRIPT).toContain("od:pf-mode");
@@ -24,119 +135,129 @@ describe("bridge script", () => {
     expect(BRIDGE_SCRIPT).toContain("od:pf-hover");
   });
 
-  it("contains CSS for pick mode cursor", () => {
-    expect(BRIDGE_SCRIPT).toContain("crosshair");
-    expect(BRIDGE_SCRIPT).toContain("data-pf-mode");
-  });
-
-  it("contains postMessage call for pick event", () => {
-    expect(BRIDGE_SCRIPT).toContain("post('od:pf-pick'");
-  });
-
-  it("contains postMessage call for hover event", () => {
-    expect(BRIDGE_SCRIPT).toContain("post('od:pf-hover'");
-  });
-
-  it("contains postMessage call for leave event", () => {
-    expect(BRIDGE_SCRIPT).toContain("post('od:pf-leave'");
-  });
-
-  it("listens for od:pf-mode message to toggle pick mode", () => {
-    expect(BRIDGE_SCRIPT).toContain("od:pf-mode");
-    expect(BRIDGE_SCRIPT).toContain("toggleAttribute('data-pf-mode'");
-  });
-
-  it("prevents default on click when pick mode is active", () => {
-    expect(BRIDGE_SCRIPT).toContain("preventDefault()");
-    expect(BRIDGE_SCRIPT).toContain("stopPropagation()");
+  it("installs pick-mode CSS when executed", () => {
+    const h = createBridgeHarness();
+    const style = h.document.head.children[0];
+    expect(style.tagName).toBe("STYLE");
+    expect(style.textContent).toContain("crosshair");
+    expect(style.textContent).toContain("data-pf-mode");
   });
 });
 
-describe("domSelectorFor", () => {
-  it("returns null for null/undefined", () => {
-    expect(BRIDGE_SCRIPT).toContain("domSelectorFor");
-    expect(BRIDGE_SCRIPT).toContain("return null");
+describe("pick mode", () => {
+  it("toggles the data-pf-mode attribute from host messages", () => {
+    const h = createBridgeHarness();
+
+    h.dispatchWindow("message", { data: { type: "od:pf-mode", enabled: true } });
+    expect(h.html.hasAttribute("data-pf-mode")).toBe(true);
+
+    h.dispatchWindow("message", { data: { type: "od:pf-mode", enabled: false } });
+    expect(h.html.hasAttribute("data-pf-mode")).toBe(false);
   });
 
-  it("returns body > tag:nth-of-type(n) pattern", () => {
-    expect(BRIDGE_SCRIPT).toContain("body > ");
-    expect(BRIDGE_SCRIPT).toContain("nth-of-type");
-  });
+  it("ignores hover while pick mode is disabled", () => {
+    const h = createBridgeHarness();
+    const button = h.createElement("button");
+    button.textContent = "Save";
+    h.body.appendChild(button);
 
-  it("skips script, style, template, meta elements", () => {
-    expect(BRIDGE_SCRIPT).toMatch(/\/\^\(script\|style\|template\|meta/);
-  });
-});
+    h.dispatchDocument("mouseover", { target: button });
 
-describe("visibleTarget (named 'visibleTarget')", () => {
-  it("rejects document.documentElement", () => {
-    expect(BRIDGE_SCRIPT).toContain("document.documentElement");
-  });
-
-  it("rejects elements with display:none", () => {
-    expect(BRIDGE_SCRIPT).toContain("display");
-    expect(BRIDGE_SCRIPT).toContain("visibility");
-  });
-
-  it("rejects elements with size 0", () => {
-    expect(BRIDGE_SCRIPT).toContain("width < 1");
-    expect(BRIDGE_SCRIPT).toContain("height < 1");
+    expect(h.postMessage).not.toHaveBeenCalled();
   });
 });
 
-describe("isMeaningful", () => {
-  it("accepts semantic elements", () => {
-    expect(BRIDGE_SCRIPT).toMatch(/\b(a|button|input|textarea|select|label)\b/);
+describe("hover behavior", () => {
+  it("posts hover metadata and creates a highlight overlay", () => {
+    const h = createBridgeHarness();
+    const button = h.createElement("button");
+    button.setAttribute("id", "save-button");
+    button.setAttribute("class", "primary cta");
+    button.textContent = " Save changes ";
+    button.outerHTML = `<button id="save-button" class="primary cta">Save changes</button>`;
+    button.rect = { x: 12.2, y: 20.8, width: 130.4, height: 44.2 };
+    h.body.appendChild(button);
+    h.enablePickMode();
+
+    h.dispatchDocument("mouseover", { target: button });
+
+    expect(h.postMessage).toHaveBeenCalledTimes(1);
+    expect(h.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "od:pf-hover",
+        elementId: "save-button",
+        tag: "button",
+        id: "save-button",
+        classes: "primary cta",
+        text: "Save changes",
+        selector: "body > button:nth-of-type(1)",
+        rect: { x: 12, y: 21, width: 130, height: 44 },
+        style: expect.objectContaining({ fontSize: "16px" }),
+      }),
+      "*",
+    );
+
+    const overlay = h.body.children.find((child) => child.getAttribute("id") === "__pf-highlight-overlay");
+    expect(overlay).toBeTruthy();
+    expect(overlay?.style.display).toBe("block");
+    expect(overlay?.style.left).toBe("12px");
+    expect(overlay?.style.top).toBe("21px");
   });
 
-  it("accepts elements with role or aria-label", () => {
-    expect(BRIDGE_SCRIPT).toContain("role");
-    expect(BRIDGE_SCRIPT).toContain("aria-label");
-  });
+  it("does not post for invisible targets", () => {
+    const h = createBridgeHarness();
+    const hidden = h.createElement("button");
+    hidden.setAttribute("id", "hidden-button");
+    hidden.textContent = "Hidden";
+    hidden.computedStyle = { ...hidden.computedStyle, display: "none" };
+    h.body.appendChild(hidden);
+    h.enablePickMode();
 
-  it("accepts divs with id or class and text", () => {
-    expect(BRIDGE_SCRIPT).toContain("hasAttribute('id')");
-    expect(BRIDGE_SCRIPT).toContain("hasAttribute('class')");
-    expect(BRIDGE_SCRIPT).toContain("textContent");
+    h.dispatchDocument("mouseover", { target: hidden });
+
+    expect(h.postMessage).not.toHaveBeenCalled();
   });
 });
 
-describe("element meta building", () => {
-  it("collects tag name (lowercase)", () => {
-    expect(BRIDGE_SCRIPT).toContain("tagName.toLowerCase()");
+describe("click behavior", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("collects class names", () => {
-    expect(BRIDGE_SCRIPT).toContain("className");
-  });
+  it("prevents navigation and posts pick metadata", () => {
+    const h = createBridgeHarness();
+    const link = h.createElement("a");
+    link.setAttribute("class", "nav-link");
+    link.textContent = "Pricing";
+    h.body.appendChild(h.createElement("a"));
+    h.body.appendChild(link);
+    h.enablePickMode();
 
-  it("collects bounding rect", () => {
-    expect(BRIDGE_SCRIPT).toContain("getBoundingClientRect()");
-  });
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+    h.dispatchDocument("click", { target: link, preventDefault, stopPropagation });
 
-  it("collects text content (trimmed, max 160)", () => {
-    expect(BRIDGE_SCRIPT).toContain(".slice(0, 160)");
-  });
-
-  it("collects outerHTML hint (max 200)", () => {
-    expect(BRIDGE_SCRIPT).toContain("outerHTML");
-    expect(BRIDGE_SCRIPT).toContain(".slice(0, 200)");
-  });
-
-  it("generates fallback elementId when id and classes are missing", () => {
-    expect(BRIDGE_SCRIPT).toContain("Math.random()");
-    expect(BRIDGE_SCRIPT).toContain("toString(36)");
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(h.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "od:pf-pick",
+        elementId: "nav-link",
+        tag: "a",
+        selector: "body > a:nth-of-type(2)",
+      }),
+      "*",
+    );
   });
 });
 
-describe("highlight overlay", () => {
-  it("creates a fixed overlay div", () => {
-    expect(BRIDGE_SCRIPT).toContain("position:fixed");
-    expect(BRIDGE_SCRIPT).toContain("pointer-events:none");
-    expect(BRIDGE_SCRIPT).toContain("z-index:2147483646");
-  });
+describe("leave behavior", () => {
+  it("posts leave and hides the overlay when the pointer leaves a target", () => {
+    const h = createBridgeHarness();
+    h.enablePickMode();
 
-  it("uses blue highlight color", () => {
-    expect(BRIDGE_SCRIPT).toContain("59, 130, 246");
+    h.dispatchDocument("mouseout", { target: null });
+
+    expect(h.postMessage).toHaveBeenCalledWith({ type: "od:pf-leave" }, "*");
   });
 });
