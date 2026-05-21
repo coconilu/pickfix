@@ -6,11 +6,20 @@ import type { BridgeMessage, ElementMeta } from "@/lib/bridge-protocol";
 
 export function PreviewPanel() {
   const { previewUrl, pickMode } = useSessionState();
-  const { setPickMode, setActiveElement, addPickedElement } =
+  const { setPickMode, setActiveElement, addPickedElement, setPreviewUrl } =
     useSessionActions();
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const [iframeReady, setIframeReady] = useState(false);
+  const [navigatingUrl, setNavigatingUrl] = useState(previewUrl);
+  const [addressValue, setAddressValue] = useState(previewUrl);
+
+  // Sync address bar when previewUrl changes externally
+  useEffect(() => {
+    setAddressValue(previewUrl);
+    setNavigatingUrl(previewUrl);
+  }, [previewUrl]);
 
   // Handle messages from the bridge inside the iframe
   const handleMessage = useCallback(
@@ -73,6 +82,22 @@ export function PreviewPanel() {
     );
   }, [pickMode, iframeReady]);
 
+  const handleAddressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const url = addressValue.trim();
+      if (!url) return;
+      // Auto-prepend http:// if no protocol
+      const normalized = /^https?:\/\//i.test(url) ? url : `http://${url}`;
+      setNavigatingUrl(normalized);
+      setPreviewUrl(normalized);
+      setIframeReady(false);
+      addressInputRef.current?.blur();
+    } else if (e.key === "Escape") {
+      setAddressValue(navigatingUrl);
+      addressInputRef.current?.blur();
+    }
+  };
+
   const togglePickMode = () => {
     setPickMode(!pickMode);
   };
@@ -105,6 +130,20 @@ export function PreviewPanel() {
           </button>
         </div>
       </div>
+      <div className="preview-address-bar">
+        <span className="preview-address-icon">🔗</span>
+        <input
+          ref={addressInputRef}
+          className="preview-address-input"
+          type="text"
+          value={addressValue}
+          onChange={(e) => setAddressValue(e.target.value)}
+          onKeyDown={handleAddressKeyDown}
+          onFocus={(e) => e.target.select()}
+          placeholder="Enter URL and press Enter…"
+          spellCheck={false}
+        />
+      </div>
       <div className="preview-iframe-wrapper">
         {!iframeReady && (
           <div className="preview-loading">
@@ -115,7 +154,7 @@ export function PreviewPanel() {
         <iframe
           ref={iframeRef}
           className="preview-iframe"
-          src={previewUrl}
+          src={navigatingUrl}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           onLoad={() => setIframeReady(true)}
           title="PickFix Preview"

@@ -28,6 +28,7 @@ interface SessionActions {
   appendToLastAssistant: (chunk: string) => void;
   setStreaming: (v: boolean) => void;
   clearPickedElements: () => void;
+  setPreviewUrl: (url: string) => void;
 }
 
 const SessionStateCtx = createContext<SessionState | null>(null);
@@ -96,6 +97,10 @@ export function SessionProvider({
     setState((s) => ({ ...s, pickedElements: [], activeElement: null }));
   }, []);
 
+  const setPreviewUrl = useCallback((url: string) => {
+    setState((s) => ({ ...s, previewUrl: url }));
+  }, []);
+
   // Memoize the actions object so consumers don't re-render on every state change.
   const actions = useMemo<SessionActions>(
     () => ({
@@ -107,6 +112,7 @@ export function SessionProvider({
       appendToLastAssistant,
       setStreaming,
       clearPickedElements,
+      setPreviewUrl,
     }),
     [
       setPickMode,
@@ -117,6 +123,7 @@ export function SessionProvider({
       appendToLastAssistant,
       setStreaming,
       clearPickedElements,
+      setPreviewUrl,
     ],
   );
 
