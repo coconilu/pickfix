@@ -4,7 +4,7 @@
  * WebSocket upgrade, and bridge script serving.
  */
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse, type Server } from "node:http";
-import type { Socket } from "node:net";
+import type { Duplex } from "node:stream";
 import { connect } from "node:net";
 import { BRIDGE_SCRIPT } from "@pickfix/bridge";
 
@@ -17,7 +17,7 @@ export interface ProxyOptions {
 const STRIP_REQUEST_HEADERS = new Set([
   "host", "connection", "keep-alive", "transfer-encoding",
   "te", "trailer", "upgrade", "proxy-authorization",
-  "proxy-authenticate",
+  "proxy-authenticate", "accept-encoding",
 ]);
 
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -77,6 +77,9 @@ export function createProxyServer(options: ProxyOptions): Server {
         proxyRes.on("end", () => {
           let body = Buffer.concat(chunks).toString("utf-8");
           body = insertBeforeClose(body, "</head>", `<script src="${BRIDGE_PATH}" data-pf-bridge></script>`);
+          // Remove compression/ length headers since body was modified
+          delete resHeaders["content-encoding"];
+          delete resHeaders["content-length"];
           clientRes.writeHead(statusCode, resHeaders);
           clientRes.end(body);
         });
@@ -106,7 +109,7 @@ export function createProxyServer(options: ProxyOptions): Server {
     res.end(BRIDGE_SCRIPT);
   }
 
-  function proxyWebSocket(clientReq: IncomingMessage, clientSocket: Socket, head: Buffer): void {
+  function proxyWebSocket(clientReq: IncomingMessage, clientSocket: Duplex, head: Buffer): void {
     const targetSocket = connect(TARGET_PORT, TARGET_HOST, () => {
       const lines = [`${clientReq.method ?? "GET"} ${clientReq.url ?? "/"} HTTP/1.1`];
       for (const [key, value] of Object.entries(clientReq.headers)) {
