@@ -41,6 +41,7 @@ function copyHeaders(
 }
 
 function insertBeforeClose(html: string, closeTag: string, injection: string): string {
+  if (/\sdata-pf-bridge(?:\s|=|>)/i.test(html)) return html;
   const escaped = closeTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const idx = html.search(new RegExp(escaped, "i"));
   if (idx >= 0) return html.slice(0, idx) + injection + html.slice(idx);

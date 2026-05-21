@@ -5,6 +5,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer, request, type IncomingMessage, type ServerResponse, type Server } from "node:http";
+import { connect } from "node:net";
+import type { Socket } from "node:net";
 import { createProxyServer } from "../src/server.js";
 import { BRIDGE_SCRIPT } from "@pickfix/bridge";
 
@@ -30,7 +32,7 @@ function fetchProxy(
     headers?: Record<string, string>;
     body?: string;
   } = {},
-): Promise<{ status: number; body: string; headers: Record<string, string> }> {
+): Promise<{ status: number; body: string; buffer: Buffer; headers: Record<string, string> }> {
   return new Promise((resolve, reject) => {
     const req = request(
       `http://localhost:${PROXY_PORT}${path}`,
@@ -46,13 +48,60 @@ function fetchProxy(
           for (const [k, v] of Object.entries(res.headers)) {
             if (v) headers[k] = Array.isArray(v) ? v[0] : v;
           }
-          resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString(), headers });
+          const buffer = Buffer.concat(chunks);
+          resolve({ status: res.statusCode ?? 0, body: buffer.toString(), buffer, headers });
         });
       },
     );
     req.on("error", reject);
     if (options.body) req.write(options.body);
     req.end();
+  });
+}
+
+function countMatches(text: string, needle: string): number {
+  return text.split(needle).length - 1;
+}
+
+function requestWebSocketThroughProxy(path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(PROXY_PORT, "localhost");
+    let received = "";
+    let upgraded = false;
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("timed out waiting for websocket proxy response"));
+    }, 2_000);
+
+    socket.on("connect", () => {
+      socket.write([
+        `GET ${path} HTTP/1.1`,
+        `Host: localhost:${PROXY_PORT}`,
+        "Connection: Upgrade",
+        "Upgrade: websocket",
+        "Sec-WebSocket-Key: test-key",
+        "Sec-WebSocket-Version: 13",
+        "",
+        "",
+      ].join("\r\n"));
+    });
+    socket.on("data", (chunk) => {
+      received += chunk.toString("utf8");
+      if (!upgraded && received.includes("\r\n\r\n")) {
+        upgraded = true;
+        socket.write("ping");
+      }
+      if (received.includes("echo:ping")) {
+        clearTimeout(timeout);
+        socket.end();
+        resolve(received);
+      }
+    });
+    socket.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    socket.on("close", () => clearTimeout(timeout));
   });
 }
 
@@ -89,6 +138,16 @@ beforeAll(async () => {
     } else if (url === "/no-head") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end("<html><body>no head tag</body></html>");
+    } else if (url === "/already-injected") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end('<html><head><script src="/__pf/bridge.js" data-pf-bridge></script></head><body>already</body></html>');
+    } else if (url === "/image.png") {
+      const body = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02, 0x03]);
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Content-Length": String(body.length),
+      });
+      res.end(body);
     } else if (url.startsWith("/echo")) {
       const body = await readRequestBody(_req);
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -106,6 +165,21 @@ beforeAll(async () => {
       res.writeHead(404);
       res.end("not found");
     }
+  });
+
+  targetServer.on("upgrade", (req: IncomingMessage, socket: Socket) => {
+    if (req.url !== "/hmr") {
+      socket.destroy();
+      return;
+    }
+    socket.write([
+      "HTTP/1.1 101 Switching Protocols",
+      "Connection: Upgrade",
+      "Upgrade: websocket",
+      "",
+      "",
+    ].join("\r\n"));
+    socket.on("data", (chunk) => socket.write(`echo:${chunk.toString("utf8")}`));
   });
 
   await new Promise<void>((r) => targetServer.listen(TARGET_PORT, r));
@@ -134,6 +208,12 @@ describe("proxy server", () => {
     expect(res.body).toContain("<h1>Hello</h1>");
   });
 
+  it("does not inject a duplicate bridge script", async () => {
+    const res = await fetchProxy("/already-injected");
+    expect(res.status).toBe(200);
+    expect(countMatches(res.body, "data-pf-bridge")).toBe(1);
+  });
+
   it("injects bridge when no </head> tag (falls back to <body)", async () => {
     const res = await fetchProxy("/no-head");
     expect(res.body).toContain('<script src="/__pf/bridge.js"');
@@ -150,6 +230,13 @@ describe("proxy server", () => {
     const res = await fetchProxy("/style.css");
     expect(res.status).toBe(200);
     expect(res.body).toBe("body { color: red; }");
+  });
+
+  it("passes through binary assets unchanged", async () => {
+    const res = await fetchProxy("/image.png");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/png");
+    expect([...res.buffer]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02, 0x03]);
   });
 
   it("forwards method, path, query, headers, and request body", async () => {
@@ -216,5 +303,37 @@ describe("proxy server", () => {
   it("handles streamed HTML injection", async () => {
     const res = await fetchProxy("/stream");
     expect(res.body).toContain('<script src="/__pf/bridge.js"');
+  });
+
+  it("returns 502 when the upstream target is unavailable", async () => {
+    const brokenProxy = createProxyServer({
+      port: 14006,
+      targetUrl: "http://localhost:14999",
+    });
+    await new Promise<void>((r) => brokenProxy.listen(14006, r));
+    try {
+      const res = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const req = request("http://localhost:14006/", (response) => {
+          const chunks: Buffer[] = [];
+          response.on("data", (c) => chunks.push(c));
+          response.on("end", () => {
+            resolve({ status: response.statusCode ?? 0, body: Buffer.concat(chunks).toString() });
+          });
+        });
+        req.on("error", reject);
+        req.end();
+      });
+
+      expect(res.status).toBe(502);
+      expect(res.body).toContain("Bad Gateway");
+    } finally {
+      await new Promise<void>((r) => brokenProxy.close(() => r()));
+    }
+  });
+
+  it("proxies WebSocket upgrade traffic", async () => {
+    const response = await requestWebSocketThroughProxy("/hmr");
+    expect(response).toContain("HTTP/1.1 101 Switching Protocols");
+    expect(response).toContain("echo:ping");
   });
 });
