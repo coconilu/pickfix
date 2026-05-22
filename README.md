@@ -43,12 +43,15 @@ iframe → proxy (:4000) → external target app (:5678 by default)
 # 1. Install dependencies
 pnpm install
 
-# 2. Start PickFix with the official demo as an external target
+# 2. Start PickFix with the official Next demo as an external target
 pnpm dev
 # → http://localhost:3001
+
+# Or test zero-intrusion injection against the stock Nuxt starter
+pnpm dev:nuxt
 ```
 
-To connect a separate project instead of the demo:
+To connect a separate project instead of the examples:
 
 ```bash
 pnpm pickfix -- --project ../my-app --dev 'pnpm dev' --port 5678
@@ -104,7 +107,8 @@ pickfix/
 ├── apps/
 │   └── web/          # Three-panel UI (Next.js 16 + React 18)
 └── examples/
-    └── demo/         # Official external-project example
+    ├── next-demo/    # Official Next.js external-project example
+    └── nuxt-demo/    # Stock Nuxt starter external-project example
 ```
 
 See [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) for the external-project model and minimal-intrusion notes.
@@ -117,7 +121,8 @@ See [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) for the external-project mo
 - [ ] Phase 2: Source annotation (data-od-source via SWC/Babel plugin)
 - [ ] Phase 2: Git worktree integration
 - [ ] Phase 2: Inspect panel (live CSS tweaks)
-- [ ] Phase 3: Framework adapters (Nuxt, SvelteKit, Vite)
+- [x] Nuxt zero-intrusion example target
+- [ ] Phase 3: Framework adapters (SvelteKit, Vite)
 - [ ] Phase 3: Diff preview and commit integration
 
 ## License

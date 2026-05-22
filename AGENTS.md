@@ -7,11 +7,13 @@
 pnpm install
 
 # Start everything (target → proxy → web, in order)
-pnpm dev                             # uses CLI with examples/demo as external target
+pnpm dev                             # uses CLI with examples/next-demo as external target
+pnpm dev:nuxt                        # uses CLI with examples/nuxt-demo as external target
 pnpm pickfix -- --project ../my-app --dev 'pnpm dev' --port 5678
 
 # Run a single service (upstream must already be running)
-PORT=5678 pnpm --filter @pickfix/example-demo dev  # official external project example
+PORT=5678 pnpm --filter @pickfix/example-next-demo dev  # Next example target
+PORT=5678 pnpm --filter @pickfix/example-nuxt-demo dev  # Nuxt example target
 PF_TARGET_URL=http://localhost:5678 pnpm --filter @pickfix/proxy dev  # port 4000
 pnpm --filter @pickfix/web dev                      # port 3001 (needs :4000)
 
@@ -50,9 +52,9 @@ bridge (packages/bridge) — pure JS IIFE, exported as a string constant:
 
 ## Service startup order
 
-The three services have a dependency chain. The root `pnpm dev` script uses `@pickfix/cli` to start the target project, wait for it, then start proxy and web. By default it treats `examples/demo` as the official external project example:
+The three services have a dependency chain. The root `pnpm dev` script uses `@pickfix/cli` to start the target project, wait for it, then start proxy and web. By default it treats `examples/next-demo` as the official external project example. Use `pnpm dev:nuxt` for the stock Nuxt starter:
 
-1. `PORT=5678 pnpm --filter @pickfix/example-demo dev` (target project, port 5678)
+1. `PORT=5678 pnpm --filter @pickfix/example-next-demo dev` or `@pickfix/example-nuxt-demo` (target project, port 5678)
 2. `PF_TARGET_URL=http://localhost:5678 pnpm --filter @pickfix/proxy dev` (port 4000 — needs :5678 responding)
 3. `pnpm --filter @pickfix/web dev` (port 3001 — needs :4000 responding)
 
@@ -68,7 +70,8 @@ packages/
 apps/
   web/        @pickfix/web       — Next.js 16 + React 18 App Router, AI SDK v4
 examples/
-  demo/       @pickfix/example-demo  — official external project example
+  next-demo/  @pickfix/example-next-demo  — Next.js external project example
+  nuxt-demo/  @pickfix/example-nuxt-demo  — stock Nuxt starter example
 ```
 
 ## Environment
@@ -89,7 +92,7 @@ examples/
 
 - All packages extend `tsconfig.base.json` (ES2022 target, ESNext module, `bundler` resolution, strict mode)
 - `bridge` and `proxy` use `"type": "module"` in package.json
-- Next.js apps (`web`, `demo`) add `jsx: react-jsx`, DOM libs, and `@/*` path alias → `./src/*`
+- Next.js apps (`web`, `next-demo`) add `jsx: react-jsx`, DOM libs, and `@/*` path alias → `./src/*`
 - No build step for bridge/proxy — `proxy` runs via `tsx`, `bridge` is imported as source
 
 ## Dependencies / API versions

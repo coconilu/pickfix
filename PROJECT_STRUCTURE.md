@@ -39,7 +39,8 @@ pickfix/
     proxy/            # HTTP/WebSocket preview proxy and bridge injector
 
   examples/
-    demo/             # official external-project example only
+    next-demo/        # official Next.js external-project example
+    nuxt-demo/        # stock Nuxt starter external-project example
 
   PROJECT_STRUCTURE.md
   AGENTS.md
@@ -49,7 +50,7 @@ pickfix/
 
 ## Role of `examples/`
 
-`examples/demo` is not a required location for user projects. It is an official example target app used for development, demos, and regression checks.
+`examples/next-demo` and `examples/nuxt-demo` are not required locations for user projects. They are official example target apps used for development, demos, and regression checks.
 
 Real users should keep their projects outside this repository:
 
@@ -75,14 +76,16 @@ Default external-project connection is zero-intrusion:
 - no dependency installation required in the external project
 - bridge injection happens at proxy time, not by editing target source files
 
-The only change made in this repository is to the official demo app:
+The only changes made in this repository are example-app conveniences:
 
 ```txt
-examples/demo/package.json
+examples/next-demo/package.json
   "dev": "next dev"
+examples/nuxt-demo/package.json
+  "dev": "nuxt dev"
 ```
 
-This lets the CLI control the demo port with `PORT=5678`. This is a demo convenience, not a requirement for arbitrary user projects. If a user project cannot respect `PORT`, they can still point PickFix at an already-running server with `--target` or choose a matching `--port`.
+This lets the CLI control the example target port with `PORT=5678`. This is a demo convenience, not a requirement for arbitrary user projects. If a user project cannot respect `PORT`, they can still point PickFix at an already-running server with `--target` or choose a matching `--port`.
 
 ## CLI options
 
@@ -106,18 +109,23 @@ Supported options:
 
 ```bash
 pnpm dev
+pnpm dev:next
+pnpm dev:nuxt
 ```
 
-Runs the official demo as if it were an external project:
+Runs the official examples as if they were external projects:
 
 ```bash
-pnpm pickfix -- --project examples/demo --dev 'pnpm dev' --port 5678
+pnpm pickfix -- --project examples/next-demo --dev 'pnpm dev' --port 5678
+pnpm pickfix -- --project examples/nuxt-demo --dev 'pnpm dev' --port 5678
 ```
 
 Manual service startup is still possible:
 
 ```bash
-PORT=5678 pnpm --filter @pickfix/example-demo dev
+PORT=5678 pnpm --filter @pickfix/example-next-demo dev
+# or
+PORT=5678 pnpm --filter @pickfix/example-nuxt-demo dev
 PF_TARGET_URL=http://localhost:5678 pnpm --filter @pickfix/proxy dev
 pnpm --filter @pickfix/web dev
 ```
@@ -129,4 +137,4 @@ pnpm --filter @pickfix/web dev
 - `packages/bridge` collects element metadata and sends it to the host UI via `postMessage`.
 - `apps/web` displays the preview/chat UI.
 
-Future project analysis, patch application, git diff, and rollback logic should live in a separate core package instead of coupling directly to `examples/demo`.
+Future project analysis, patch application, git diff, and rollback logic should live in a separate core package instead of coupling directly to `examples/*-demo`.

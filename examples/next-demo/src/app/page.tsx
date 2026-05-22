@@ -11,7 +11,7 @@ export default function Home() {
             <span className="hero-highlight">In Days, Not Months</span>
           </h1>
           <p className="hero-subtitle">
-            The ultimate Next.js boilerplate for indie hackers. Authentication,
+            The ultimate SaaS boilerplate for indie hackers. Authentication,
             payments, emails, and a beautiful landing page — all wired up and
             ready to customize.
           </p>

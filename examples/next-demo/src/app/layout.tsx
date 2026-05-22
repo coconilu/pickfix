@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ShipFast — Launch Your SaaS in Days",
-  description: "A Next.js boilerplate for indie hackers",
+  description: "A SaaS boilerplate for indie hackers",
 };
 
 export default function RootLayout({
