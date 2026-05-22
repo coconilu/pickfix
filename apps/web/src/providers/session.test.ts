@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialSessionState,
+  parsePersistedSessionIndex,
+  projectActiveSessionStorageKey,
+  projectSessionContentStorageKey,
+  projectSessionIndexStorageKey,
   parsePersistedSession,
   projectSessionStorageKey,
   reduceSessionState,
+  serializePersistedSessionIndex,
   serializePersistedSession,
   type SessionState,
 } from "./session";
@@ -27,6 +32,9 @@ function element(overrides: Partial<ElementMeta> = {}): ElementMeta {
 describe("SessionProvider state reducer", () => {
   it("creates the initial session state", () => {
     expect(createInitialSessionState("http://localhost:4000")).toEqual({
+      sessionId: "default",
+      projectName: "Project",
+      availableSessions: [],
       pickMode: false,
       activeElement: null,
       pickedElements: [],
@@ -161,6 +169,50 @@ describe("SessionProvider state reducer", () => {
 describe("session persistence helpers", () => {
   it("creates a project-scoped storage key", () => {
     expect(projectSessionStorageKey("abc123")).toBe("pickfix:session:abc123");
+    expect(projectSessionContentStorageKey("abc123", "default")).toBe("pickfix:session:abc123");
+    expect(projectSessionContentStorageKey("abc123", "session-2")).toBe("pickfix:session:abc123:session-2");
+    expect(projectSessionIndexStorageKey("abc123")).toBe("pickfix:sessions:abc123");
+    expect(projectActiveSessionStorageKey("abc123")).toBe("pickfix:active-session:abc123");
+  });
+
+  it("serializes and parses a project session list", () => {
+    const sessions = [
+      { id: "default", title: "Session 1", createdAt: 1, updatedAt: 2 },
+      { id: "session-abc", title: "Session 2", createdAt: 3, updatedAt: 4 },
+    ];
+
+    expect(parsePersistedSessionIndex(serializePersistedSessionIndex(sessions))).toEqual(sessions);
+  });
+
+  it("falls back to a default session list for invalid indexes", () => {
+    expect(parsePersistedSessionIndex("not json", 123)).toEqual([
+      { id: "default", title: "Session 1", createdAt: 123, updatedAt: 123 },
+    ]);
+  });
+
+  it("restores a selected session and clears transient selection state", () => {
+    const next = reduceSessionState({
+      ...createInitialSessionState("/"),
+      pickMode: true,
+      activeElement: element(),
+      pickedElements: [element()],
+      messages: [{ id: "old", role: "user", content: "old" }],
+      claudeModel: "opus",
+    }, {
+      type: "restoreSession",
+      sessionId: "session-2",
+      persisted: {
+        messages: [{ id: "new", role: "user", content: "new" }],
+        claudeModel: "sonnet",
+      },
+    });
+
+    expect(next.sessionId).toBe("session-2");
+    expect(next.pickMode).toBe(false);
+    expect(next.activeElement).toBeNull();
+    expect(next.pickedElements).toEqual([]);
+    expect(next.messages).toEqual([{ id: "new", role: "user", content: "new" }]);
+    expect(next.claudeModel).toBe("sonnet");
   });
 
   it("serializes and parses persisted messages and model", () => {

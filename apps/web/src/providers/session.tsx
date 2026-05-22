@@ -14,7 +14,17 @@ import { fetchProjectInfo } from "@/lib/project";
 
 export type ClaudeModel = "default" | "sonnet" | "opus" | "haiku";
 
+export interface ProjectSessionSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface SessionState {
+  sessionId: string;
+  projectName: string;
+  availableSessions: ProjectSessionSummary[];
   pickMode: boolean;
   activeElement: ElementMeta | null;
   pickedElements: ElementMeta[];
@@ -33,6 +43,11 @@ interface PersistedSessionState {
   updatedAt: number;
 }
 
+interface PersistedSessionIndex {
+  version: 1;
+  sessions: ProjectSessionSummary[];
+}
+
 export type SessionStateUpdate =
   | { type: "setPickMode"; enabled: boolean }
   | { type: "setActiveElement"; element: ElementMeta | null }
@@ -44,10 +59,17 @@ export type SessionStateUpdate =
   | { type: "setStreaming"; value: boolean }
   | { type: "clearPickedElements" }
   | { type: "setPreviewUrl"; url: string }
-  | { type: "setClaudeModel"; model: ClaudeModel };
+  | { type: "setClaudeModel"; model: ClaudeModel }
+  | { type: "restoreSession"; sessionId: string; persisted: Pick<SessionState, "messages" | "claudeModel"> | null }
+  | { type: "setSessionMetadata"; projectName: string; availableSessions: ProjectSessionSummary[] };
+
+export const DEFAULT_SESSION_ID = "default";
 
 export function createInitialSessionState(previewUrl: string): SessionState {
   return {
+    sessionId: DEFAULT_SESSION_ID,
+    projectName: "Project",
+    availableSessions: [],
     pickMode: false,
     activeElement: null,
     pickedElements: [],
@@ -75,6 +97,55 @@ function isChatMessage(value: unknown): value is ChatMessage {
 
 export function projectSessionStorageKey(projectKey: string): string {
   return `pickfix:session:${projectKey}`;
+}
+
+export function projectSessionContentStorageKey(projectKey: string, sessionId = DEFAULT_SESSION_ID): string {
+  if (sessionId === DEFAULT_SESSION_ID) return projectSessionStorageKey(projectKey);
+  return `pickfix:session:${projectKey}:${sessionId}`;
+}
+
+export function projectSessionIndexStorageKey(projectKey: string): string {
+  return `pickfix:sessions:${projectKey}`;
+}
+
+export function projectActiveSessionStorageKey(projectKey: string): string {
+  return `pickfix:active-session:${projectKey}`;
+}
+
+export function createDefaultSessionSummary(now = Date.now()): ProjectSessionSummary {
+  return {
+    id: DEFAULT_SESSION_ID,
+    title: "Session 1",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function isProjectSessionSummary(value: unknown): value is ProjectSessionSummary {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && typeof value.title === "string"
+    && typeof value.createdAt === "number"
+    && typeof value.updatedAt === "number";
+}
+
+export function parsePersistedSessionIndex(raw: string | null, now = Date.now()): ProjectSessionSummary[] {
+  if (!raw) return [createDefaultSessionSummary(now)];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.sessions)) {
+      return [createDefaultSessionSummary(now)];
+    }
+    const sessions = parsed.sessions.filter(isProjectSessionSummary);
+    return sessions.length > 0 ? sessions : [createDefaultSessionSummary(now)];
+  } catch {
+    return [createDefaultSessionSummary(now)];
+  }
+}
+
+export function serializePersistedSessionIndex(sessions: ProjectSessionSummary[]): string {
+  const persisted: PersistedSessionIndex = { version: 1, sessions };
+  return JSON.stringify(persisted);
 }
 
 export function parsePersistedSession(raw: string | null): Pick<SessionState, "messages" | "claudeModel"> | null {
@@ -162,6 +233,23 @@ export function reduceSessionState(
       return { ...state, previewUrl: update.url };
     case "setClaudeModel":
       return { ...state, claudeModel: update.model };
+    case "restoreSession":
+      return {
+        ...state,
+        sessionId: update.sessionId,
+        pickMode: false,
+        activeElement: null,
+        pickedElements: [],
+        messages: update.persisted?.messages ?? [],
+        isStreaming: false,
+        claudeModel: update.persisted?.claudeModel ?? "default",
+      };
+    case "setSessionMetadata":
+      return {
+        ...state,
+        projectName: update.projectName,
+        availableSessions: update.availableSessions,
+      };
   }
 }
 
@@ -177,6 +265,9 @@ interface SessionActions {
   clearPickedElements: () => void;
   setPreviewUrl: (url: string) => void;
   setClaudeModel: (model: ClaudeModel) => void;
+  createSession: () => void;
+  switchSession: (sessionId: string) => void;
+  deleteSession: (sessionId: string) => void;
 }
 
 const SessionStateCtx = createContext<SessionState | null>(null);
@@ -192,7 +283,25 @@ export function SessionProvider({
   const [state, setState] = useState<SessionState>(() =>
     createInitialSessionState(previewUrl),
   );
+  const [projectKey, setProjectKey] = useState<string | null>(null);
   const [storageKey, setStorageKey] = useState<string | null>(null);
+
+  const updateSessions = useCallback((projectKeyValue: string, sessions: ProjectSessionSummary[]) => {
+    window.localStorage.setItem(projectSessionIndexStorageKey(projectKeyValue), serializePersistedSessionIndex(sessions));
+    setState((current) => reduceSessionState(current, {
+      type: "setSessionMetadata",
+      projectName: current.projectName,
+      availableSessions: sessions,
+    }));
+  }, []);
+
+  const switchToSession = useCallback((projectKeyValue: string, sessionId: string) => {
+    const key = projectSessionContentStorageKey(projectKeyValue, sessionId);
+    const persisted = parsePersistedSession(window.localStorage.getItem(key));
+    window.localStorage.setItem(projectActiveSessionStorageKey(projectKeyValue), sessionId);
+    setStorageKey(key);
+    setState((current) => reduceSessionState(current, { type: "restoreSession", sessionId, persisted }));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -200,17 +309,22 @@ export function SessionProvider({
     fetchProjectInfo()
       .then((project) => {
         if (cancelled) return;
-        const key = projectSessionStorageKey(project.key);
-        setStorageKey(key);
-
+        setProjectKey(project.key);
+        const sessions = parsePersistedSessionIndex(window.localStorage.getItem(projectSessionIndexStorageKey(project.key)));
+        window.localStorage.setItem(projectSessionIndexStorageKey(project.key), serializePersistedSessionIndex(sessions));
+        const activeSessionId = window.localStorage.getItem(projectActiveSessionStorageKey(project.key));
+        const sessionId = sessions.some((session) => session.id === activeSessionId) ? activeSessionId! : sessions[0].id;
+        const key = projectSessionContentStorageKey(project.key, sessionId);
         const persisted = parsePersistedSession(window.localStorage.getItem(key));
-        if (!persisted) return;
+        setStorageKey(key);
         setState((current) => {
-          if (current.messages.length > 0) return current;
           return {
             ...current,
-            messages: persisted.messages,
-            claudeModel: persisted.claudeModel,
+            projectName: project.name,
+            availableSessions: sessions,
+            sessionId,
+            messages: persisted?.messages ?? [],
+            claudeModel: persisted?.claudeModel ?? "default",
           };
         });
       })
@@ -226,7 +340,14 @@ export function SessionProvider({
   useEffect(() => {
     if (!storageKey) return;
     window.localStorage.setItem(storageKey, serializePersistedSession(state));
-  }, [state.messages, state.claudeModel, storageKey, state]);
+    if (projectKey) {
+      const now = Date.now();
+      const sessions = state.availableSessions.map((session) => (
+        session.id === state.sessionId ? { ...session, updatedAt: now } : session
+      ));
+      window.localStorage.setItem(projectSessionIndexStorageKey(projectKey), serializePersistedSessionIndex(sessions));
+    }
+  }, [state.messages, state.claudeModel, storageKey, projectKey, state.availableSessions, state.sessionId]);
 
   const setPickMode = useCallback((enabled: boolean) => {
     setState((s) => reduceSessionState(s, { type: "setPickMode", enabled }));
@@ -272,6 +393,38 @@ export function SessionProvider({
     setState((s) => reduceSessionState(s, { type: "setClaudeModel", model }));
   }, []);
 
+  const createSession = useCallback(() => {
+    if (!projectKey) return;
+    const now = Date.now();
+    const nextIndex = state.availableSessions.length + 1;
+    const session: ProjectSessionSummary = {
+      id: `session-${now.toString(36)}`,
+      title: `Session ${nextIndex}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const sessions = [...state.availableSessions, session];
+    updateSessions(projectKey, sessions);
+    switchToSession(projectKey, session.id);
+  }, [projectKey, state.availableSessions, switchToSession, updateSessions]);
+
+  const switchSession = useCallback((sessionId: string) => {
+    if (!projectKey || sessionId === state.sessionId || state.isStreaming) return;
+    if (!state.availableSessions.some((session) => session.id === sessionId)) return;
+    switchToSession(projectKey, sessionId);
+  }, [projectKey, state.availableSessions, state.isStreaming, state.sessionId, switchToSession]);
+
+  const deleteSession = useCallback((sessionId: string) => {
+    if (!projectKey || state.isStreaming) return;
+    let sessions = state.availableSessions.filter((session) => session.id !== sessionId);
+    if (sessions.length === 0) sessions = [createDefaultSessionSummary()];
+    window.localStorage.removeItem(projectSessionContentStorageKey(projectKey, sessionId));
+    updateSessions(projectKey, sessions);
+    if (sessionId === state.sessionId) {
+      switchToSession(projectKey, sessions[0].id);
+    }
+  }, [projectKey, state.availableSessions, state.isStreaming, state.sessionId, switchToSession, updateSessions]);
+
   // Memoize the actions object so consumers don't re-render on every state change.
   const actions = useMemo<SessionActions>(
     () => ({
@@ -286,6 +439,9 @@ export function SessionProvider({
       clearPickedElements,
       setPreviewUrl,
       setClaudeModel,
+      createSession,
+      switchSession,
+      deleteSession,
     }),
     [
       setPickMode,
@@ -299,6 +455,9 @@ export function SessionProvider({
       clearPickedElements,
       setPreviewUrl,
       setClaudeModel,
+      createSession,
+      switchSession,
+      deleteSession,
     ],
   );
 

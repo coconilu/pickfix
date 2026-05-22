@@ -4,6 +4,7 @@ import { SessionProvider } from "@/providers/session";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ClaudeStatus } from "@/components/ClaudeStatus";
 import { PreviewPanel } from "@/components/PreviewPanel";
+import { SessionManager } from "@/components/SessionManager";
 import { StatusPanel } from "@/components/StatusPanel";
 
 const PREVIEW_URL = process.env.NEXT_PUBLIC_PREVIEW_URL ?? "http://localhost:4000";
@@ -18,6 +19,7 @@ export default function Home() {
             <span className="app-tagline">Point, pick, fix</span>
           </div>
           <div className="app-header-right">
+            <SessionManager />
             <ClaudeStatus />
             <span className="app-env-badge">MVP</span>
           </div>
