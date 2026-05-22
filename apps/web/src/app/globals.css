@@ -69,6 +69,78 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.claude-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.claude-status:hover {
+  transform: translateY(-1px);
+}
+
+.claude-status-checking {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.claude-status-available {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.claude-status-unavailable {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.claude-status-error {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.claude-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.claude-status-dot-checking {
+  background: #94a3b8;
+  animation: claude-pulse 1.2s ease-in-out infinite;
+}
+
+.claude-status-dot-available {
+  background: #16a34a;
+}
+
+.claude-status-dot-unavailable {
+  background: #dc2626;
+}
+
+.claude-status-dot-error {
+  background: #d97706;
+}
+
+@keyframes claude-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
 .app-main {
   display: flex;
   flex: 1;
