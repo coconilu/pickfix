@@ -133,6 +133,7 @@ export function ChatPanel() {
       signal: abortController.signal,
       model: claudeModel === "default" ? undefined : claudeModel,
     });
+    window.dispatchEvent(new Event("pickfix:changes-refresh"));
     if (abortControllerRef.current === abortController) {
       abortControllerRef.current = null;
     }

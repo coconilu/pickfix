@@ -29,11 +29,31 @@ export function StatusPanel() {
     [status],
   );
 
-  useEffect(() => {
-    getGitStatus().then(setStatus).catch((err) => {
+  const refreshStatus = useCallback(async () => {
+    try {
+      setStatus(await getGitStatus());
+      setError(null);
+    } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
+
+  useEffect(() => {
+    const onRefresh = () => refreshStatus();
+    window.addEventListener("pickfix:changes-refresh", onRefresh);
+    return () => window.removeEventListener("pickfix:changes-refresh", onRefresh);
+  }, [refreshStatus]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshStatus();
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [refreshStatus]);
 
   useEffect(() => {
     if (!status) return;

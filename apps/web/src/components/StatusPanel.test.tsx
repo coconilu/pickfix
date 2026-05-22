@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StatusPanel } from "./StatusPanel";
 import { getGitStatus, revertGitFile, type GitStatus } from "@/lib/git";
 
@@ -35,6 +35,11 @@ function gitStatus(paths: string[]): GitStatus {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
+});
+
+beforeEach(() => {
+  vi.useRealTimers();
 });
 
 describe("StatusPanel revert confirmation", () => {
@@ -96,5 +101,38 @@ describe("StatusPanel revert confirmation", () => {
 
     expect(await screen.findByText("Unable to revert file.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Revert app/page.tsx" })).toBeTruthy();
+  });
+
+  it("refreshes when a changes refresh event is dispatched", async () => {
+    getGitStatusMock
+      .mockResolvedValueOnce(gitStatus([]))
+      .mockResolvedValueOnce(gitStatus(["app/page.tsx"]));
+
+    render(<StatusPanel />);
+
+    expect(await screen.findByText("No changes yet — start editing to see file changes here.")).toBeTruthy();
+
+    window.dispatchEvent(new Event("pickfix:changes-refresh"));
+
+    expect(await screen.findByRole("button", { name: "Revert app/page.tsx" })).toBeTruthy();
+    expect(getGitStatusMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("polls for changes while the page is visible", async () => {
+    vi.useFakeTimers();
+    getGitStatusMock
+      .mockResolvedValueOnce(gitStatus([]))
+      .mockResolvedValueOnce(gitStatus(["styles.css"]));
+
+    render(<StatusPanel />);
+
+    await act(async () => {});
+    expect(screen.getByText("No changes yet — start editing to see file changes here.")).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(getGitStatusMock).toHaveBeenCalledTimes(2);
   });
 });
