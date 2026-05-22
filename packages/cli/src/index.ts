@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn, type ChildProcess } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,7 @@ interface CliOptions {
   proxyPort: number;
   webPort: number;
   startDev: boolean;
+  framework?: "next" | "nuxt";
 }
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -52,6 +53,38 @@ function parsePort(value: string | undefined, flag: string): number {
   return port;
 }
 
+function readPackageJson(projectRoot: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(readFileSync(resolve(projectRoot, "package.json"), "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function detectFramework(pkg: Record<string, unknown> | null): "next" | "nuxt" | undefined {
+  const deps = {
+    ...(pkg?.dependencies && typeof pkg.dependencies === "object" ? pkg.dependencies : {}),
+    ...(pkg?.devDependencies && typeof pkg.devDependencies === "object" ? pkg.devDependencies : {}),
+  } as Record<string, unknown>;
+  if (typeof deps.next === "string") return "next";
+  if (typeof deps.nuxt === "string") return "nuxt";
+  return undefined;
+}
+
+function hasDevScript(pkg: Record<string, unknown> | null): boolean {
+  const scripts = pkg?.scripts;
+  return Boolean(scripts && typeof scripts === "object" && typeof (scripts as Record<string, unknown>).dev === "string");
+}
+
+function defaultDevCommand(projectRoot: string, port: number | undefined): { command?: string; framework?: "next" | "nuxt" } {
+  const pkg = readPackageJson(projectRoot);
+  const framework = detectFramework(pkg);
+  if (hasDevScript(pkg)) return { command: "pnpm dev", framework };
+  if (framework === "next") return { command: `pnpm exec next dev${port ? ` --port ${port}` : ""}`, framework };
+  if (framework === "nuxt") return { command: `pnpm exec nuxt dev${port ? ` --port ${port}` : ""}`, framework };
+  return { framework };
+}
+
 function parseArgs(argv: string[]): CliOptions {
   let project: string | undefined;
   let devCommand: string | undefined;
@@ -76,7 +109,6 @@ function parseArgs(argv: string[]): CliOptions {
 
   if (!project) usage();
   if (!target && !port) usage();
-  if (startDev && !devCommand) usage();
 
   const projectRoot = resolve(invocationCwd, project);
   try {
@@ -89,8 +121,15 @@ function parseArgs(argv: string[]): CliOptions {
     process.exit(1);
   }
 
+  const detected = defaultDevCommand(projectRoot, port);
+  devCommand = devCommand ?? detected.command;
+  if (startDev && !devCommand) {
+    console.error(`${formatLabel("pickfix")} Could not infer a dev command. Pass --dev <command>.`);
+    usage();
+  }
+
   const targetUrl = target ?? `http://localhost:${port}`;
-  return { projectRoot, devCommand, port, targetUrl, proxyPort, webPort, startDev };
+  return { projectRoot, devCommand, port, targetUrl, proxyPort, webPort, startDev, framework: detected.framework };
 }
 
 function handleChildFailure(labelName: string, message: string): void {
@@ -208,6 +247,7 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   console.log(`${formatLabel("pickfix")} project: ${options.projectRoot}`);
   console.log(`${formatLabel("pickfix")} target:  ${options.targetUrl}`);
+  if (options.framework) console.log(`${formatLabel("pickfix")} framework: ${options.framework}`);
 
   if (options.startDev) {
     startShellProcess("target", options.devCommand!, options.projectRoot, options.port ? { PORT: String(options.port) } : {});
