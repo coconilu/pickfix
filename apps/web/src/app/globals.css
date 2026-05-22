@@ -136,6 +136,13 @@ html, body {
   background: #d97706;
 }
 
+.claude-status-model {
+  padding-left: 6px;
+  border-left: 1px solid currentColor;
+  opacity: 0.78;
+  font-weight: 700;
+}
+
 @keyframes claude-pulse {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
@@ -329,6 +336,29 @@ html, body {
 
 .chat-send-btn:disabled {
   background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.chat-refill-btn {
+  padding: 8px 12px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.chat-refill-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.chat-refill-btn:disabled {
+  color: #94a3b8;
   cursor: not-allowed;
 }
 

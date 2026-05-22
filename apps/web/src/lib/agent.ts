@@ -17,6 +17,7 @@ export interface AgentStatus {
   available: boolean;
   bin: string;
   version?: string;
+  model?: string;
   error?: string;
   checkedAt: number;
 }
@@ -36,11 +37,13 @@ export async function fetchAgentStatus(): Promise<AgentStatus> {
 export async function streamAgentResponse(
   ctx: AgentContext,
   onChunk: (text: string) => void,
+  options: { signal?: AbortSignal } = {},
 ): Promise<string> {
   const res = await fetch("/api/agent", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(ctx),
+    signal: options.signal,
   });
 
   if (!res.ok) {

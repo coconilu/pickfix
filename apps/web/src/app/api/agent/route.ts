@@ -89,6 +89,15 @@ function writeText(controller: ReadableStreamDefaultController<Uint8Array>, text
   controller.enqueue(new TextEncoder().encode(text));
 }
 
+function getConfiguredClaudeModel(): string | undefined {
+  return (
+    process.env.PF_CLAUDE_MODEL ||
+    process.env.CLAUDE_MODEL ||
+    process.env.ANTHROPIC_MODEL ||
+    undefined
+  );
+}
+
 export async function POST(req: Request): Promise<Response> {
   let body: AgentRequest;
   try {
@@ -104,6 +113,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const claudeBin = process.env.CLAUDE_BIN || "claude";
   const cwd = process.env.PF_AGENT_CWD || process.env.PICKFIX_PROJECT_ROOT || path.resolve(process.cwd());
+  const model = getConfiguredClaudeModel();
   const prompt = buildPrompt({ ...body, userMessage }, cwd);
   let child: ReturnType<typeof spawn> | null = null;
 
@@ -111,7 +121,7 @@ export async function POST(req: Request): Promise<Response> {
     start(controller) {
       const spawned = spawn(
         claudeBin,
-        ["-p", "--output-format", "stream-json", "--verbose"],
+        ["-p", "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : [])],
         {
           cwd,
           env: process.env,

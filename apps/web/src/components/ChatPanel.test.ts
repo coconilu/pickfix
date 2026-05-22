@@ -68,6 +68,7 @@ describe("runChatTurn", () => {
         projectFiles: {},
       },
       expect.any(Function),
+      { signal: undefined },
     );
     expect(a.appendToLastAssistant).toHaveBeenNthCalledWith(1, "Done");
     expect(a.appendToLastAssistant).toHaveBeenNthCalledWith(2, ".");
@@ -93,6 +94,30 @@ describe("runChatTurn", () => {
       "⚠️ Agent request failed: Claude unavailable",
     );
     expect(a.setStreaming).toHaveBeenNthCalledWith(1, true);
+    expect(a.setStreaming).toHaveBeenLastCalledWith(false);
+    expect(a.clearPickedElements).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks the assistant response as stopped when aborted", async () => {
+    const a = actions();
+    const abortError = new Error("The operation was aborted.");
+    abortError.name = "AbortError";
+    const streamAgentResponseImpl = vi.fn(async () => {
+      throw abortError;
+    });
+
+    await runChatTurn({
+      userText: "Stop this",
+      currentMessages: [],
+      pickedElements: [],
+      actions: a,
+      streamAgentResponseImpl,
+    });
+
+    expect(a.appendToLastAssistant).toHaveBeenCalledWith("\n\n⏹️ Stopped.");
+    expect(a.appendToLastAssistant).not.toHaveBeenCalledWith(
+      expect.stringContaining("Agent request failed"),
+    );
     expect(a.setStreaming).toHaveBeenLastCalledWith(false);
     expect(a.clearPickedElements).toHaveBeenCalledTimes(1);
   });

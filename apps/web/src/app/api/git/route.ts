@@ -44,6 +44,7 @@ function parsePorcelain(output: string, projectPath: string): Pick<GitStatus, "c
     const rawPath = line.slice(3);
     const repoPath = rawPath.includes(" -> ") ? rawPath.split(" -> ").pop()! : rawPath;
     const filePath = stripProjectPath(repoPath, projectPath);
+    if (!repoPath.trim() || !filePath.trim()) continue;
     changedFiles.push(filePath);
 
     if (line.startsWith("??") || indexStatus === "A" || worktreeStatus === "A") {

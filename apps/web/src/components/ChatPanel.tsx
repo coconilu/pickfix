@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useSessionState, useSessionActions } from "@/providers/session";
 import { PickedElement } from "./PickedElement";
 import { streamAgentResponse } from "@/lib/agent";
@@ -13,18 +13,24 @@ interface ChatTurnActions {
   clearPickedElements: () => void;
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 export async function runChatTurn({
   userText,
   currentMessages,
   pickedElements,
   actions,
   streamAgentResponseImpl = streamAgentResponse,
+  signal,
 }: {
   userText: string;
   currentMessages: ChatMessage[];
   pickedElements: ElementMeta[];
   actions: ChatTurnActions;
   streamAgentResponseImpl?: typeof streamAgentResponse;
+  signal?: AbortSignal;
 }): Promise<void> {
   const lastPicked =
     pickedElements.length > 0 ? pickedElements[pickedElements.length - 1] : null;
@@ -54,8 +60,14 @@ export async function runChatTurn({
         projectFiles: {},
       },
       (chunk) => actions.appendToLastAssistant(chunk),
+      { signal },
     );
   } catch (error) {
+    if (isAbortError(error)) {
+      actions.appendToLastAssistant("\n\n⏹️ Stopped.");
+      return;
+    }
+
     actions.appendToLastAssistant(
       `⚠️ Agent request failed: ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -74,11 +86,17 @@ export function ChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [inputValue, setInputValue] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   // Track latest messages via ref to avoid stale closures
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const pickedElementsRef = useRef(pickedElements);
   pickedElementsRef.current = pickedElements;
+
+  const lastUserPrompt = useMemo(
+    () => [...messages].reverse().find((msg) => msg.role === "user")?.content ?? "",
+    [messages],
+  );
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -95,6 +113,8 @@ export function ChatPanel() {
 
     // Use ref to get latest messages (avoids stale closure)
     const currentMessages = messagesRef.current;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     await runChatTurn({
       userText,
@@ -106,8 +126,28 @@ export function ChatPanel() {
         setStreaming,
         clearPickedElements,
       },
+      signal: abortController.signal,
     });
+    if (abortControllerRef.current === abortController) {
+      abortControllerRef.current = null;
+    }
   }, [isStreaming, addMessage, appendToLastAssistant, setStreaming, clearPickedElements]);
+
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
+
+  const handleRefillLastPrompt = useCallback(() => {
+    if (!lastUserPrompt) return;
+    setInputValue(lastUserPrompt);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight}px`;
+    });
+  }, [lastUserPrompt]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -188,10 +228,19 @@ export function ChatPanel() {
         />
         <button
           className="chat-send-btn"
-          onClick={handleSend}
-          disabled={isStreaming || !inputValue.trim()}
+          onClick={isStreaming ? handleStop : handleSend}
+          disabled={!isStreaming && !inputValue.trim()}
         >
-          {isStreaming ? "..." : "Send"}
+          {isStreaming ? "Stop" : "Send"}
+        </button>
+        <button
+          type="button"
+          className="chat-refill-btn"
+          onClick={handleRefillLastPrompt}
+          disabled={!lastUserPrompt}
+          title="Refill the last prompt"
+        >
+          Refill
         </button>
       </div>
     </div>

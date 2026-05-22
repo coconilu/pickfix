@@ -10,6 +10,7 @@ interface AgentStatusResponse {
   available: boolean;
   bin: string;
   version?: string;
+  model?: string;
   error?: string;
   checkedAt: number;
 }
@@ -23,9 +24,19 @@ function unavailable(bin: string, error: string): AgentStatusResponse {
   return {
     available: false,
     bin,
+    model: getConfiguredClaudeModel(),
     error,
     checkedAt: Date.now(),
   };
+}
+
+function getConfiguredClaudeModel(): string | undefined {
+  return (
+    process.env.PF_CLAUDE_MODEL ||
+    process.env.CLAUDE_MODEL ||
+    process.env.ANTHROPIC_MODEL ||
+    undefined
+  );
 }
 
 export async function GET(): Promise<Response> {
@@ -43,6 +54,7 @@ export async function GET(): Promise<Response> {
       available: true,
       bin,
       version,
+      model: getConfiguredClaudeModel(),
       checkedAt: Date.now(),
     };
     return Response.json(status);

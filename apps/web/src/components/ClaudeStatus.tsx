@@ -19,10 +19,14 @@ function getLabel(state: ClaudeStatusState): string {
   return "Checking…";
 }
 
+function getModelLabel(status: AgentStatus | null): string {
+  return status?.model?.trim() || "default";
+}
+
 function getTitle(state: ClaudeStatusState, status: AgentStatus | null, error: string | null): string {
   if (state === "available") {
     const version = status?.version ? ` ${status.version}` : "";
-    return `Claude Code${version} detected via ${status?.bin ?? "claude"}. Agent is ready.`;
+    return `Claude Code${version} detected via ${status?.bin ?? "claude"}. Model: ${getModelLabel(status)}. Agent is ready.`;
   }
 
   if (state === "unavailable") {
@@ -71,6 +75,9 @@ export function ClaudeStatus() {
     >
       <span className={`claude-status-dot claude-status-dot-${state}`} />
       <span>{getLabel(state)}</span>
+      {state === "available" && (
+        <span className="claude-status-model">{getModelLabel(status)}</span>
+      )}
     </button>
   );
 }

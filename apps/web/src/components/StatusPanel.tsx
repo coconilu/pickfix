@@ -22,6 +22,11 @@ export function StatusPanel() {
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
+  const fileChanges = useMemo(
+    () => status?.fileChanges.filter((change) => change.path.trim().length > 0) ?? [],
+    [status],
+  );
+
   useEffect(() => {
     getGitStatus().then(setStatus).catch((err) => {
       setError(err instanceof Error ? err.message : String(err));
@@ -30,13 +35,13 @@ export function StatusPanel() {
 
   useEffect(() => {
     if (!status) return;
-    if (selectedFile && status.fileChanges.some((change) => change.path === selectedFile)) return;
-    setSelectedFile(status.fileChanges[0]?.path ?? null);
-  }, [selectedFile, status]);
+    if (selectedFile && fileChanges.some((change) => change.path === selectedFile)) return;
+    setSelectedFile(fileChanges[0]?.path ?? null);
+  }, [fileChanges, selectedFile, status]);
 
   const selectedChange = useMemo(
-    () => status?.fileChanges.find((change) => change.path === selectedFile) ?? null,
-    [selectedFile, status],
+    () => fileChanges.find((change) => change.path === selectedFile) ?? null,
+    [fileChanges, selectedFile],
   );
 
   if (!status) {
@@ -54,7 +59,7 @@ export function StatusPanel() {
     <div className="status-panel">
       <div className="status-panel-header status-panel-header-row">
         <h2 className="status-panel-title">Changes</h2>
-        <span className="status-count-badge">{status.fileChanges.length}</span>
+        <span className="status-count-badge">{fileChanges.length}</span>
       </div>
 
       {status.branch && (
@@ -74,10 +79,10 @@ export function StatusPanel() {
       )}
 
       <div className="status-section status-changes-section">
-        {status.fileChanges.length > 0 ? (
+        {fileChanges.length > 0 ? (
           <div className="status-file-browser">
             <ul className="status-file-list" aria-label="Changed files">
-              {status.fileChanges.map((change) => {
+              {fileChanges.map((change) => {
                 const isSelected = change.path === selectedChange?.path;
                 return (
                   <li key={change.path}>
