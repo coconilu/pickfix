@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { realpath } from "node:fs/promises";
+import { realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { GitFileChange, GitStatus } from "@/lib/git";
@@ -22,6 +22,37 @@ async function git(args: string[], cwd: string): Promise<string> {
     maxBuffer: 1024 * 1024 * 10,
   });
   return stdout.trimEnd();
+}
+
+async function getProjectContext(): Promise<{ projectRoot: string; gitRoot: string; projectPath: string; pathspec: string; isOwnRepo: boolean }> {
+  const configuredProjectRoot = process.env.PICKFIX_PROJECT_ROOT || process.env.PF_AGENT_CWD || process.cwd();
+  const projectRoot = await realpath(configuredProjectRoot).catch(() => configuredProjectRoot);
+
+  await git(["rev-parse", "--is-inside-work-tree"], projectRoot);
+
+  const gitRoot = await git(["rev-parse", "--show-toplevel"], projectRoot);
+  const projectPath = path.relative(gitRoot, projectRoot) || ".";
+  const pathspec = projectPath.startsWith("..") ? "." : projectPath;
+  const isOwnRepo = pathspec === ".";
+
+  return { projectRoot, gitRoot, projectPath, pathspec, isOwnRepo };
+}
+
+function isSafeRelativePath(filePath: string): boolean {
+  return Boolean(filePath) && !path.isAbsolute(filePath) && !filePath.split(/[\\/]+/).includes("..");
+}
+
+function toRepoPath(filePath: string, pathspec: string): string {
+  return pathspec === "." ? filePath : path.posix.join(pathspec, filePath);
+}
+
+async function isTrackedInHead(repoPath: string, gitRoot: string): Promise<boolean> {
+  try {
+    await git(["cat-file", "-e", `HEAD:${repoPath}`], gitRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function stripProjectPath(filePath: string, projectPath: string): string {
@@ -132,11 +163,8 @@ function emptyStatus(repositoryStatus: GitStatus["repositoryStatus"], message: s
 }
 
 export async function GET(): Promise<Response> {
-  const configuredProjectRoot = process.env.PICKFIX_PROJECT_ROOT || process.env.PF_AGENT_CWD || process.cwd();
-  const projectRoot = await realpath(configuredProjectRoot).catch(() => configuredProjectRoot);
-
   try {
-    await git(["rev-parse", "--is-inside-work-tree"], projectRoot);
+    await getProjectContext();
   } catch {
     return Response.json(emptyStatus(
       "none",
@@ -146,10 +174,7 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const gitRoot = await git(["rev-parse", "--show-toplevel"], projectRoot);
-    const projectPath = path.relative(gitRoot, projectRoot) || ".";
-    const pathspec = projectPath.startsWith("..") ? "." : projectPath;
-    const isOwnRepo = pathspec === ".";
+    const { gitRoot, pathspec, isOwnRepo } = await getProjectContext();
     const [branch, baseBranch, porcelain] = await Promise.all([
       isOwnRepo ? getBranch(gitRoot) : Promise.resolve(null),
       isOwnRepo ? getBaseBranch(gitRoot) : Promise.resolve(null),
@@ -179,5 +204,43 @@ export async function GET(): Promise<Response> {
       "Unable to read git status for this project.",
       "Unable to read file changes.",
     ));
+  }
+}
+
+export async function DELETE(request: Request): Promise<Response> {
+  let filePath: unknown;
+  try {
+    ({ path: filePath } = await request.json());
+  } catch {
+    return new Response("Invalid JSON body.", { status: 400 });
+  }
+
+  if (typeof filePath !== "string" || !isSafeRelativePath(filePath)) {
+    return new Response("A safe relative file path is required.", { status: 400 });
+  }
+
+  try {
+    const { projectRoot, gitRoot, pathspec } = await getProjectContext();
+    const repoPath = toRepoPath(filePath, pathspec);
+    const absolutePath = path.resolve(projectRoot, filePath);
+    const relativeToProject = path.relative(projectRoot, absolutePath);
+
+    if (relativeToProject.startsWith("..") || path.isAbsolute(relativeToProject)) {
+      return new Response("File path must stay inside the project root.", { status: 400 });
+    }
+
+    const porcelain = await git(["status", "--porcelain=v1", "--", repoPath], gitRoot);
+    if (!porcelain) return GET();
+
+    if (porcelain.startsWith("??") || !(await isTrackedInHead(repoPath, gitRoot))) {
+      await git(["restore", "--staged", "--", repoPath], gitRoot).catch(() => undefined);
+      await rm(absolutePath, { recursive: true, force: true });
+    } else {
+      await git(["restore", "--source=HEAD", "--staged", "--worktree", "--", repoPath], gitRoot);
+    }
+
+    return GET();
+  } catch (error) {
+    return new Response(error instanceof Error ? error.message : "Unable to revert file.", { status: 500 });
   }
 }

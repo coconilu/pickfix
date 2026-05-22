@@ -26,6 +26,20 @@ export async function getGitStatus(): Promise<GitStatus> {
   return res.json();
 }
 
+export async function revertGitFile(filePath: string): Promise<GitStatus> {
+  const res = await fetch("/api/git", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: filePath }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return res.json();
+}
+
 export async function getDiffSummary(): Promise<string> {
   return (await getGitStatus()).diff;
 }

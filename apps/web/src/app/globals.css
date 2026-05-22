@@ -343,13 +343,26 @@ html, body {
 }
 
 .chat-message-user .chat-message-content {
-  background: #f1f5f9;
-  padding: 8px 12px;
-  border-radius: 8px;
+  background: #fef3c7;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #78350f;
 }
 
 .chat-message-assistant .chat-message-content {
-  color: #334155;
+  background: #eef2ff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #1e1b4b;
+  border-left: 3px solid #818cf8;
+}
+
+.chat-message-user .chat-message-role {
+  color: #b45309;
+}
+
+.chat-message-assistant .chat-message-role {
+  color: #4f46e5;
 }
 
 .chat-input-area {
@@ -736,7 +749,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 8px;
+  padding: 4px 5px 4px 8px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -746,6 +759,48 @@ html, body {
   cursor: pointer;
   text-align: left;
   transition: background 120ms ease, border-color 120ms ease;
+}
+
+.status-file-select {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-file-revert {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.status-file-revert:hover:not(:disabled) {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-file-revert:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .status-file-row:hover {
@@ -807,9 +862,20 @@ html, body {
 }
 
 .status-file-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.status-error {
+  padding: 8px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .status-repo-strip {
@@ -952,4 +1018,123 @@ html, body {
 
 .status-btn-secondary:hover:not(:disabled) {
   background: #f1f5f9;
+}
+
+/* ===== Confirm Dialog ===== */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  animation: confirm-overlay-in 150ms ease;
+}
+
+@keyframes confirm-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-dialog {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(15, 23, 42, 0.08);
+  max-width: 380px;
+  width: calc(100vw - 40px);
+  padding: 24px;
+  animation: confirm-dialog-in 180ms ease;
+}
+
+@keyframes confirm-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.confirm-dialog-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.confirm-dialog-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.confirm-dialog-body {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.confirm-dialog-path {
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", monospace;
+  color: #94a3b8;
+  background: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 20px;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confirm-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.confirm-btn-cancel {
+  background: #fff;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.confirm-btn-cancel:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.confirm-btn-destructive {
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #dc2626;
+}
+
+.confirm-btn-destructive:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.confirm-btn-destructive:disabled {
+  background: #fca5a5;
+  border-color: #fca5a5;
+  cursor: not-allowed;
 }
