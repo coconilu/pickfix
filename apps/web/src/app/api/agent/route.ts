@@ -18,7 +18,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function buildPrompt(ctx: AgentRequest, projectRoot: string): string {
+export function buildPrompt(ctx: AgentRequest, projectRoot: string): string {
   const picked = ctx.pickedElement;
   const priorMessages = (ctx.messages ?? [])
     .filter((m) => m.role !== "system" && m.content.trim().length > 0)
@@ -41,6 +41,26 @@ RULES:
 3. Preserve the existing style and avoid broad refactors unless requested.
 4. After editing, briefly summarize what changed and which files were touched.
 5. If you cannot safely make a change, explain the blocker and the exact next step.
+6. Do not edit dependencies, generated output, caches, or build artifacts such as node_modules, .nuxt, .next, dist, or build unless explicitly requested.
+
+HOW TO LOCATE THE RIGHT FILE:
+- First inspect package.json to identify the framework and scripts.
+- For Nuxt/Vue projects, prioritize app/app.vue, app/pages, pages, components, layouts, assets, and nuxt.config.ts.
+- For Next/React projects, prioritize app, pages, src/app, src/pages, components, and global CSS files.
+- Use the picked element's text, class names, id, selector, and HTML hint to search for the rendering component.
+- If the picked selector points at framework-generated markup, trace back to the closest source component instead of editing generated files.
+
+EDITING QUALITY BAR:
+- Make the smallest source change that satisfies the user's visual or behavior request.
+- Prefer existing project conventions for styling, naming, formatting, and component structure.
+- For styling requests, prefer the narrowest local style or existing stylesheet pattern that affects the picked area.
+- Avoid unrelated cleanup, broad rewrites, dependency changes, or formatting churn.
+- If the request is ambiguous, choose the most likely interpretation from the picked element context and mention the assumption briefly.
+
+RESPONSE FORMAT:
+- Keep the response concise.
+- Include the files changed.
+- Mention if no safe change was made and why.
 
 ${picked ? `PICKED ELEMENT:
 - Tag: <${picked.tag}>
