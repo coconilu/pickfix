@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialSessionState,
+  parsePersistedSession,
+  projectSessionStorageKey,
   reduceSessionState,
+  serializePersistedSession,
   type SessionState,
 } from "./session";
 import type { ChatMessage, ElementMeta } from "@/lib/bridge-protocol";
@@ -152,5 +155,33 @@ describe("SessionProvider state reducer", () => {
 
     expect(next.pickedElements).toEqual([]);
     expect(next.activeElement).toBeNull();
+  });
+});
+
+describe("session persistence helpers", () => {
+  it("creates a project-scoped storage key", () => {
+    expect(projectSessionStorageKey("abc123")).toBe("pickfix:session:abc123");
+  });
+
+  it("serializes and parses persisted messages and model", () => {
+    const state: SessionState = {
+      ...createInitialSessionState("/"),
+      messages: [{ id: "user-1", role: "user", content: "Make it blue" }],
+      claudeModel: "sonnet",
+      pickMode: true,
+      pickedElements: [element()],
+      activeElement: element(),
+      isStreaming: true,
+    };
+
+    expect(parsePersistedSession(serializePersistedSession(state))).toEqual({
+      messages: [{ id: "user-1", role: "user", content: "Make it blue" }],
+      claudeModel: "sonnet",
+    });
+  });
+
+  it("ignores invalid persisted session payloads", () => {
+    expect(parsePersistedSession("not json")).toBeNull();
+    expect(parsePersistedSession(JSON.stringify({ version: 999, messages: [] }))).toBeNull();
   });
 });

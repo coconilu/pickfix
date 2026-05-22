@@ -5,10 +5,12 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
 import type { ElementMeta, ChatMessage } from "@/lib/bridge-protocol";
+import { fetchProjectInfo } from "@/lib/project";
 
 export type ClaudeModel = "default" | "sonnet" | "opus" | "haiku";
 
@@ -20,6 +22,15 @@ export interface SessionState {
   previewUrl: string;
   isStreaming: boolean;
   claudeModel: ClaudeModel;
+}
+
+const PERSISTED_SESSION_VERSION = 1;
+
+interface PersistedSessionState {
+  version: typeof PERSISTED_SESSION_VERSION;
+  messages: ChatMessage[];
+  claudeModel: ClaudeModel;
+  updatedAt: number;
 }
 
 export type SessionStateUpdate =
@@ -45,6 +56,52 @@ export function createInitialSessionState(previewUrl: string): SessionState {
     isStreaming: false,
     claudeModel: "default",
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isClaudeModel(value: unknown): value is ClaudeModel {
+  return value === "default" || value === "sonnet" || value === "opus" || value === "haiku";
+}
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && (value.role === "user" || value.role === "assistant" || value.role === "system")
+    && typeof value.content === "string";
+}
+
+export function projectSessionStorageKey(projectKey: string): string {
+  return `pickfix:session:${projectKey}`;
+}
+
+export function parsePersistedSession(raw: string | null): Pick<SessionState, "messages" | "claudeModel"> | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || parsed.version !== PERSISTED_SESSION_VERSION || !Array.isArray(parsed.messages)) {
+      return null;
+    }
+
+    return {
+      messages: parsed.messages.filter(isChatMessage),
+      claudeModel: isClaudeModel(parsed.claudeModel) ? parsed.claudeModel : "default",
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function serializePersistedSession(state: SessionState): string {
+  const persisted: PersistedSessionState = {
+    version: PERSISTED_SESSION_VERSION,
+    messages: state.messages,
+    claudeModel: state.claudeModel,
+    updatedAt: Date.now(),
+  };
+  return JSON.stringify(persisted);
 }
 
 export function reduceSessionState(
@@ -135,6 +192,41 @@ export function SessionProvider({
   const [state, setState] = useState<SessionState>(() =>
     createInitialSessionState(previewUrl),
   );
+  const [storageKey, setStorageKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchProjectInfo()
+      .then((project) => {
+        if (cancelled) return;
+        const key = projectSessionStorageKey(project.key);
+        setStorageKey(key);
+
+        const persisted = parsePersistedSession(window.localStorage.getItem(key));
+        if (!persisted) return;
+        setState((current) => {
+          if (current.messages.length > 0) return current;
+          return {
+            ...current,
+            messages: persisted.messages,
+            claudeModel: persisted.claudeModel,
+          };
+        });
+      })
+      .catch(() => {
+        // Chat history persistence is best-effort; the app should still work without project metadata.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    window.localStorage.setItem(storageKey, serializePersistedSession(state));
+  }, [state.messages, state.claudeModel, storageKey, state]);
 
   const setPickMode = useCallback((enabled: boolean) => {
     setState((s) => reduceSessionState(s, { type: "setPickMode", enabled }));
