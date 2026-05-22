@@ -69,6 +69,12 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.claude-status-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .claude-status {
   display: inline-flex;
   align-items: center;
@@ -141,6 +147,25 @@ html, body {
   border-left: 1px solid currentColor;
   opacity: 0.78;
   font-weight: 700;
+}
+
+.claude-model-select {
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
+.claude-model-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 @keyframes claude-pulse {
@@ -249,13 +274,55 @@ html, body {
   margin-bottom: 12px;
 }
 
+.chat-message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .chat-message-role {
   font-size: 11px;
   font-weight: 600;
   color: #64748b;
-  margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+
+.chat-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-inline-btn {
+  padding: 2px 7px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-inline-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.chat-inline-btn:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.chat-inline-btn-stop {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .chat-message-element {
@@ -336,29 +403,6 @@ html, body {
 
 .chat-send-btn:disabled {
   background: #cbd5e1;
-  cursor: not-allowed;
-}
-
-.chat-refill-btn {
-  padding: 8px 12px;
-  background: #f8fafc;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-
-.chat-refill-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #94a3b8;
-}
-
-.chat-refill-btn:disabled {
-  color: #94a3b8;
   cursor: not-allowed;
 }
 

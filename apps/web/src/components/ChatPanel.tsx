@@ -24,6 +24,7 @@ export async function runChatTurn({
   actions,
   streamAgentResponseImpl = streamAgentResponse,
   signal,
+  model,
 }: {
   userText: string;
   currentMessages: ChatMessage[];
@@ -31,6 +32,7 @@ export async function runChatTurn({
   actions: ChatTurnActions;
   streamAgentResponseImpl?: typeof streamAgentResponse;
   signal?: AbortSignal;
+  model?: "sonnet" | "opus" | "haiku";
 }): Promise<void> {
   const lastPicked =
     pickedElements.length > 0 ? pickedElements[pickedElements.length - 1] : null;
@@ -58,6 +60,7 @@ export async function runChatTurn({
         pickedElement: lastPicked,
         userMessage: userText,
         projectFiles: {},
+        model,
       },
       (chunk) => actions.appendToLastAssistant(chunk),
       { signal },
@@ -78,9 +81,9 @@ export async function runChatTurn({
 }
 
 export function ChatPanel() {
-  const { messages, pickedElements, activeElement, isStreaming } =
+  const { messages, pickedElements, activeElement, isStreaming, claudeModel } =
     useSessionState();
-  const { addMessage, appendToLastAssistant, setStreaming, clearPickedElements, removePickedElement } =
+  const { addMessage, appendToLastAssistant, setStreaming, clearPickedElements, removePickedElement, restorePickedElement } =
     useSessionActions();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -93,10 +96,11 @@ export function ChatPanel() {
   const pickedElementsRef = useRef(pickedElements);
   pickedElementsRef.current = pickedElements;
 
-  const lastUserPrompt = useMemo(
-    () => [...messages].reverse().find((msg) => msg.role === "user")?.content ?? "",
+  const lastUserMessage = useMemo(
+    () => [...messages].reverse().find((msg) => msg.role === "user") ?? null,
     [messages],
   );
+  const lastUserPrompt = lastUserMessage?.content ?? "";
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -127,11 +131,12 @@ export function ChatPanel() {
         clearPickedElements,
       },
       signal: abortController.signal,
+      model: claudeModel === "default" ? undefined : claudeModel,
     });
     if (abortControllerRef.current === abortController) {
       abortControllerRef.current = null;
     }
-  }, [isStreaming, addMessage, appendToLastAssistant, setStreaming, clearPickedElements]);
+  }, [claudeModel, isStreaming, addMessage, appendToLastAssistant, setStreaming, clearPickedElements]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -140,6 +145,9 @@ export function ChatPanel() {
   const handleRefillLastPrompt = useCallback(() => {
     if (!lastUserPrompt) return;
     setInputValue(lastUserPrompt);
+    if (lastUserMessage?.pickedElement) {
+      restorePickedElement(lastUserMessage.pickedElement);
+    }
     requestAnimationFrame(() => {
       const input = inputRef.current;
       if (!input) return;
@@ -147,7 +155,7 @@ export function ChatPanel() {
       input.style.height = "auto";
       input.style.height = `${input.scrollHeight}px`;
     });
-  }, [lastUserPrompt]);
+  }, [lastUserMessage, lastUserPrompt, restorePickedElement]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -189,10 +197,17 @@ export function ChatPanel() {
             <p>Click elements in the preview to pick them, then describe what you want to change.</p>
           </div>
         )}
-        {messages.map((msg) => (
+        {messages.map((msg, index) => {
+          const isLatestMessage = index === messages.length - 1;
+          const showStop = msg.role === "assistant" && isStreaming && isLatestMessage;
+          const showPrefill = msg.role === "user" && msg.content === lastUserPrompt;
+
+          return (
           <div key={msg.id} className={`chat-message chat-message-${msg.role}`}>
-            <div className="chat-message-role">
-              {msg.role === "user" ? "You" : "Agent"}
+            <div className="chat-message-header">
+              <div className="chat-message-role">
+                {msg.role === "user" ? "You" : "Agent"}
+              </div>
             </div>
             {msg.pickedElement && (
               <div className="chat-message-element">
@@ -206,8 +221,32 @@ export function ChatPanel() {
             <div className="chat-message-content">
               {msg.content || (msg.role === "assistant" && isStreaming ? "..." : "")}
             </div>
+            {(showStop || showPrefill) && (
+              <div className="chat-message-actions">
+                {showStop && (
+                  <button
+                    type="button"
+                    className="chat-inline-btn chat-inline-btn-stop"
+                    onClick={handleStop}
+                  >
+                    Stop
+                  </button>
+                )}
+                {showPrefill && (
+                  <button
+                    type="button"
+                    className="chat-inline-btn"
+                    onClick={handleRefillLastPrompt}
+                    title="Prefill this prompt"
+                  >
+                    Prefill
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
         <div ref={chatEndRef} />
       </div>
 
@@ -228,19 +267,10 @@ export function ChatPanel() {
         />
         <button
           className="chat-send-btn"
-          onClick={isStreaming ? handleStop : handleSend}
-          disabled={!isStreaming && !inputValue.trim()}
+          onClick={handleSend}
+          disabled={isStreaming || !inputValue.trim()}
         >
-          {isStreaming ? "Stop" : "Send"}
-        </button>
-        <button
-          type="button"
-          className="chat-refill-btn"
-          onClick={handleRefillLastPrompt}
-          disabled={!lastUserPrompt}
-          title="Refill the last prompt"
-        >
-          Refill
+          Send
         </button>
       </div>
     </div>

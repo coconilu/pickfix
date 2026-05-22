@@ -10,6 +10,8 @@ import {
 } from "react";
 import type { ElementMeta, ChatMessage } from "@/lib/bridge-protocol";
 
+export type ClaudeModel = "default" | "sonnet" | "opus" | "haiku";
+
 export interface SessionState {
   pickMode: boolean;
   activeElement: ElementMeta | null;
@@ -17,6 +19,7 @@ export interface SessionState {
   messages: ChatMessage[];
   previewUrl: string;
   isStreaming: boolean;
+  claudeModel: ClaudeModel;
 }
 
 export type SessionStateUpdate =
@@ -24,11 +27,13 @@ export type SessionStateUpdate =
   | { type: "setActiveElement"; element: ElementMeta | null }
   | { type: "addPickedElement"; element: ElementMeta }
   | { type: "removePickedElement"; elementId: string }
+  | { type: "restorePickedElement"; element: ElementMeta }
   | { type: "addMessage"; message: ChatMessage }
   | { type: "appendToLastAssistant"; chunk: string }
   | { type: "setStreaming"; value: boolean }
   | { type: "clearPickedElements" }
-  | { type: "setPreviewUrl"; url: string };
+  | { type: "setPreviewUrl"; url: string }
+  | { type: "setClaudeModel"; model: ClaudeModel };
 
 export function createInitialSessionState(previewUrl: string): SessionState {
   return {
@@ -38,6 +43,7 @@ export function createInitialSessionState(previewUrl: string): SessionState {
     messages: [],
     previewUrl,
     isStreaming: false,
+    claudeModel: "default",
   };
 }
 
@@ -72,6 +78,12 @@ export function reduceSessionState(
             ? null
             : state.activeElement,
       };
+    case "restorePickedElement":
+      return {
+        ...state,
+        pickedElements: [update.element],
+        activeElement: update.element,
+      };
     case "addMessage":
       return { ...state, messages: [...state.messages, update.message] };
     case "appendToLastAssistant": {
@@ -91,6 +103,8 @@ export function reduceSessionState(
       return { ...state, pickedElements: [], activeElement: null };
     case "setPreviewUrl":
       return { ...state, previewUrl: update.url };
+    case "setClaudeModel":
+      return { ...state, claudeModel: update.model };
   }
 }
 
@@ -99,11 +113,13 @@ interface SessionActions {
   setActiveElement: (el: ElementMeta | null) => void;
   addPickedElement: (el: ElementMeta) => void;
   removePickedElement: (elementId: string) => void;
+  restorePickedElement: (el: ElementMeta) => void;
   addMessage: (msg: ChatMessage) => void;
   appendToLastAssistant: (chunk: string) => void;
   setStreaming: (v: boolean) => void;
   clearPickedElements: () => void;
   setPreviewUrl: (url: string) => void;
+  setClaudeModel: (model: ClaudeModel) => void;
 }
 
 const SessionStateCtx = createContext<SessionState | null>(null);
@@ -136,6 +152,10 @@ export function SessionProvider({
     setState((s) => reduceSessionState(s, { type: "removePickedElement", elementId }));
   }, []);
 
+  const restorePickedElement = useCallback((el: ElementMeta) => {
+    setState((s) => reduceSessionState(s, { type: "restorePickedElement", element: el }));
+  }, []);
+
   const addMessage = useCallback((msg: ChatMessage) => {
     setState((s) => reduceSessionState(s, { type: "addMessage", message: msg }));
   }, []);
@@ -156,6 +176,10 @@ export function SessionProvider({
     setState((s) => reduceSessionState(s, { type: "setPreviewUrl", url }));
   }, []);
 
+  const setClaudeModel = useCallback((model: ClaudeModel) => {
+    setState((s) => reduceSessionState(s, { type: "setClaudeModel", model }));
+  }, []);
+
   // Memoize the actions object so consumers don't re-render on every state change.
   const actions = useMemo<SessionActions>(
     () => ({
@@ -163,22 +187,26 @@ export function SessionProvider({
       setActiveElement,
       addPickedElement,
       removePickedElement,
+      restorePickedElement,
       addMessage,
       appendToLastAssistant,
       setStreaming,
       clearPickedElements,
       setPreviewUrl,
+      setClaudeModel,
     }),
     [
       setPickMode,
       setActiveElement,
       addPickedElement,
       removePickedElement,
+      restorePickedElement,
       addMessage,
       appendToLastAssistant,
       setStreaming,
       clearPickedElements,
       setPreviewUrl,
+      setClaudeModel,
     ],
   );
 

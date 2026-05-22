@@ -5,12 +5,14 @@
  * filesystem access never move into the browser bundle.
  */
 import type { ElementMeta, ChatMessage } from "./bridge-protocol";
+import type { ClaudeModel } from "@/providers/session";
 
 export interface AgentContext {
   messages: ChatMessage[];
   pickedElement: ElementMeta | null;
   userMessage: string;
   projectFiles: Record<string, string>;
+  model?: Exclude<ClaudeModel, "default">;
 }
 
 export interface AgentStatus {

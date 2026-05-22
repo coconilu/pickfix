@@ -9,6 +9,7 @@ interface AgentRequest {
   pickedElement?: ElementMeta | null;
   userMessage?: string;
   projectFiles?: Record<string, string>;
+  model?: string;
 }
 
 type ClaudeEvent = Record<string, unknown>;
@@ -98,6 +99,12 @@ function getConfiguredClaudeModel(): string | undefined {
   );
 }
 
+function normalizeClaudeModel(model: unknown): string | undefined {
+  return typeof model === "string" && ["sonnet", "opus", "haiku"].includes(model)
+    ? model
+    : undefined;
+}
+
 export async function POST(req: Request): Promise<Response> {
   let body: AgentRequest;
   try {
@@ -113,7 +120,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const claudeBin = process.env.CLAUDE_BIN || "claude";
   const cwd = process.env.PF_AGENT_CWD || process.env.PICKFIX_PROJECT_ROOT || path.resolve(process.cwd());
-  const model = getConfiguredClaudeModel();
+  const model = normalizeClaudeModel(body.model) || getConfiguredClaudeModel();
   const prompt = buildPrompt({ ...body, userMessage }, cwd);
   let child: ReturnType<typeof spawn> | null = null;
 

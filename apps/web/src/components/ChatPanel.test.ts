@@ -66,6 +66,7 @@ describe("runChatTurn", () => {
         pickedElement: picked[1],
         userMessage: "Make it blue",
         projectFiles: {},
+        model: undefined,
       },
       expect.any(Function),
       { signal: undefined },

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchAgentStatus, type AgentStatus } from "@/lib/agent";
+import { useSessionActions, useSessionState, type ClaudeModel } from "@/providers/session";
 
 type ClaudeStatusState = "checking" | "available" | "unavailable" | "error";
 
@@ -19,14 +20,22 @@ function getLabel(state: ClaudeStatusState): string {
   return "Checking…";
 }
 
-function getModelLabel(status: AgentStatus | null): string {
+const MODEL_OPTIONS: { value: ClaudeModel; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
+];
+
+function getModelLabel(model: ClaudeModel, status: AgentStatus | null): string {
+  if (model !== "default") return model;
   return status?.model?.trim() || "default";
 }
 
-function getTitle(state: ClaudeStatusState, status: AgentStatus | null, error: string | null): string {
+function getTitle(state: ClaudeStatusState, status: AgentStatus | null, error: string | null, model: ClaudeModel): string {
   if (state === "available") {
     const version = status?.version ? ` ${status.version}` : "";
-    return `Claude Code${version} detected via ${status?.bin ?? "claude"}. Model: ${getModelLabel(status)}. Agent is ready.`;
+    return `Claude Code${version} detected via ${status?.bin ?? "claude"}. Model: ${getModelLabel(model, status)}. Agent is ready.`;
   }
 
   if (state === "unavailable") {
@@ -41,6 +50,8 @@ function getTitle(state: ClaudeStatusState, status: AgentStatus | null, error: s
 }
 
 export function ClaudeStatus() {
+  const { claudeModel } = useSessionState();
+  const { setClaudeModel } = useSessionActions();
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
@@ -63,21 +74,34 @@ export function ClaudeStatus() {
   }, [checkStatus]);
 
   const state = getState(status, error, checking);
-  const title = useMemo(() => getTitle(state, status, error), [error, state, status]);
+  const title = useMemo(() => getTitle(state, status, error, claudeModel), [claudeModel, error, state, status]);
 
   return (
-    <button
-      type="button"
-      className={`claude-status claude-status-${state}`}
-      onClick={checkStatus}
-      title={`${title} Click to re-check.`}
-      aria-label={title}
-    >
-      <span className={`claude-status-dot claude-status-dot-${state}`} />
-      <span>{getLabel(state)}</span>
-      {state === "available" && (
-        <span className="claude-status-model">{getModelLabel(status)}</span>
-      )}
-    </button>
+    <div className="claude-status-group">
+      <button
+        type="button"
+        className={`claude-status claude-status-${state}`}
+        onClick={checkStatus}
+        title={`${title} Click to re-check.`}
+        aria-label={title}
+      >
+        <span className={`claude-status-dot claude-status-dot-${state}`} />
+        <span>{getLabel(state)}</span>
+        {state === "available" && (
+          <span className="claude-status-model">{getModelLabel(claudeModel, status)}</span>
+        )}
+      </button>
+      <select
+        className="claude-model-select"
+        value={claudeModel}
+        onChange={(event) => setClaudeModel(event.target.value as ClaudeModel)}
+        aria-label="Claude model"
+        title="Choose the Claude model for new agent requests"
+      >
+        {MODEL_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
   );
 }

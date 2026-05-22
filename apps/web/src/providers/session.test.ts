@@ -30,7 +30,17 @@ describe("SessionProvider state reducer", () => {
       messages: [],
       previewUrl: "http://localhost:4000",
       isStreaming: false,
+      claudeModel: "default",
     });
+  });
+
+  it("sets the Claude model", () => {
+    const next = reduceSessionState(createInitialSessionState("/"), {
+      type: "setClaudeModel",
+      model: "sonnet",
+    });
+
+    expect(next.claudeModel).toBe("sonnet");
   });
 
   it("setPickMode clears the active element", () => {
@@ -82,6 +92,23 @@ describe("SessionProvider state reducer", () => {
 
     expect(next.pickedElements).toEqual([second]);
     expect(next.activeElement).toBeNull();
+  });
+
+  it("restores a picked element for prompt prefill", () => {
+    const restored = element({ elementId: "restored" });
+    const initial: SessionState = {
+      ...createInitialSessionState("/"),
+      activeElement: element({ elementId: "old" }),
+      pickedElements: [element({ elementId: "old" })],
+    };
+
+    const next = reduceSessionState(initial, {
+      type: "restorePickedElement",
+      element: restored,
+    });
+
+    expect(next.pickedElements).toEqual([restored]);
+    expect(next.activeElement).toBe(restored);
   });
 
   it("appends chunks only to the latest assistant message", () => {
