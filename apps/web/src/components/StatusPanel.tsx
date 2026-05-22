@@ -122,9 +122,6 @@ export function StatusPanel() {
         <button className="status-btn" disabled title="Coming in Phase 2">
           Commit Changes
         </button>
-        <button className="status-btn status-btn-secondary" disabled title="Coming in Phase 2">
-          Create PR
-        </button>
       </div>
     </div>
   );
