@@ -2,64 +2,104 @@
 
 > Point, pick, fix — preview-driven development with AI.
 
-PickFix is a local development tool for making UI changes by clicking directly on a live preview. Open your app inside PickFix, pick an element, describe the change you want, and let an AI coding agent modify the real source files in your project. You can then inspect the diff, keep iterating, or roll back a file from the Changes panel.
+PickFix lets you click an element in a live preview, describe the UI change you want, and let an AI coding agent edit the real source files. You can inspect the diff, keep iterating, or revert a file from the Changes panel.
 
-```txt
-┌──────────────┬────────────────────┬──────────────┐
-│  Agent Chat  │   Live Preview     │   Changes    │
-│              │   (click to pick)  │              │
-│  ┌────────┐  │  ┌──────────────┐  │  main        │
-│  │ picked │  │  │              │  │  ├── 3 files │
-│  │ button │  │  │   iframe     │  │  changed     │
-│  │        │  │  │              │  │              │
-│  ├────────┤  │  │              │  │  diff view   │
-│  │ prompt │  │  └──────────────┘  │  revert      │
-│  └────────┘  │                    │              │
-└──────────────┴────────────────────┴──────────────┘
+![PickFix workspace](./docs/images/workspace.png)
+
+## Quick start
+
+Install dependencies:
+
+```bash
+pnpm install
 ```
 
-## Why PickFix exists
+Start PickFix with the bundled Next.js demo:
 
-Modern AI coding tools are good at editing code, but UI work often starts with a visual problem:
+```bash
+pnpm dev
+```
 
-- “This button should be more prominent.”
-- “Make this card less cramped.”
-- “Change this title copy.”
-- “The thing I mean is right here on the page.”
+Open:
 
-The problem is that the agent usually does not know what “this” means. You have to translate the visual target into file paths, component names, selectors, and implementation hints.
+```txt
+http://localhost:3001
+```
 
-PickFix tries to close that gap. The live preview becomes the context picker: click the UI element, send its DOM metadata to the agent, and let the agent trace that visual target back to the source code.
+This starts three local services in order:
 
-## Inspiration
+1. Target app on `5678`
+2. PickFix proxy on `4000`
+3. PickFix web UI on `3001`
 
-PickFix is inspired by the workflow of browser inspectors, visual website builders, and AI coding agents:
+## Try the flow
 
-- From browser DevTools: inspect the exact thing on the page.
-- From visual editors: make changes from the preview, not only from files.
-- From AI coding agents: let the machine do the source-code surgery.
+1. Open `http://localhost:3001`.
+2. Click **Pick Element** in the Live Preview toolbar.
+3. Click text, a button, or any visible UI element in the preview.
+4. Ask for a small change, for example:
 
-The goal is not to replace your editor or Git workflow. The goal is to make the first step of a UI change feel natural: point at the thing, say what you want, review the code.
+   ```txt
+   Make this heading friendlier and slightly larger.
+   ```
 
-## What it can do today
+5. Watch the preview hot reload.
+6. Review the changed files and diff in the Changes panel.
+7. Revert an individual file if the change is not right.
 
-- Run an external target app without adding code to that app.
-- Proxy the target app and inject a lightweight element-picking bridge.
-- Pick elements from the preview and send metadata to the agent.
-- Chat with a local Claude Code agent to modify source files.
-- Show changed files and diffs for the target project.
-- Revert individual changed files from the Changes panel.
-- Persist chat history per target project across page refreshes.
+## Use your own project
+
+From the PickFix repo, point PickFix at any local app:
+
+```bash
+pnpm pickfix -- \
+  --project /absolute/path/to/your-app \
+  --dev 'pnpm dev --port 5678' \
+  --port 5678
+```
+
+The `--dev` command should start your app on the same port passed to `--port`.
+
+Next.js example:
+
+```bash
+pnpm pickfix -- \
+  --project /Users/me/projects/my-next-app \
+  --dev 'pnpm exec next dev -p 5678' \
+  --port 5678
+```
+
+Nuxt example:
+
+```bash
+pnpm pickfix -- \
+  --project /Users/me/projects/my-nuxt-app \
+  --dev 'pnpm dev --port 5678' \
+  --port 5678
+```
+
+If your dev server is already running:
+
+```bash
+pnpm pickfix -- \
+  --project /absolute/path/to/your-app \
+  --target http://localhost:5173 \
+  --no-dev
+```
+
+## What it does today
+
+- Runs an external target app without adding code to that app.
+- Proxies the target app and injects a lightweight element-picking bridge.
+- Sends selected element metadata to the agent: tag, classes, selector, text, bounds, and HTML hint.
+- Lets a local Claude Code agent edit source files from the picked context.
+- Shows changed files and diffs for the target project.
+- Reverts individual changed files from the Changes panel.
+- Persists chat history per target project across page refreshes.
 
 PickFix is still an MVP. It is best suited for local experimentation and small UI edits.
 
 ## Screenshots
-
-### Three-panel workspace
-
-![PickFix workspace](./docs/images/workspace.png)
-
-The full PickFix UI showing Agent Chat, Live Preview, and Changes.
 
 ### Picking an element
 
@@ -72,6 +112,12 @@ Pick mode highlights the exact element in the proxied live preview.
 ![Reviewing changes](./docs/images/changes-panel.png)
 
 The Changes panel shows a diff preview and asks for confirmation before discarding a file's local edits.
+
+## Why PickFix exists
+
+UI work often starts with a visual target: “this button”, “that title”, “the card over here”. PickFix turns the live preview into the context picker, so the agent gets the element metadata it needs before editing code.
+
+The goal is not to replace your editor or Git workflow. The goal is to make the first step of a UI change feel natural: point at the thing, say what you want, review the code.
 
 ## How it works
 
@@ -86,7 +132,7 @@ bridge → runs inside iframe → sends picked element metadata via postMessage
 agent → runs in target project cwd → edits real source files
 ```
 
-The target project does not need a PickFix dependency. PickFix starts your dev server, proxies it, injects a small browser bridge at runtime, and runs the agent with the target project as its working directory.
+The target project does not need a PickFix dependency. PickFix starts your dev server, proxies it, injects the browser bridge at runtime, and runs the agent with the target project as its working directory.
 
 ## Requirements
 
@@ -113,111 +159,15 @@ Optional model selection:
 export PF_CLAUDE_MODEL=sonnet
 ```
 
-## Local setup
-
-Install dependencies first. This installs the PickFix packages and both bundled demo apps under `examples/`:
+## Commands
 
 ```bash
-pnpm install
-```
-
-Run the default Next.js example target:
-
-```bash
+# Start with the bundled Next.js demo
 pnpm dev
-```
 
-Open:
-
-```txt
-http://localhost:3001
-```
-
-Run the Nuxt example target:
-
-```bash
+# Start with the bundled Nuxt demo
 pnpm dev:nuxt
-```
 
-If you want to try PickFix against a separate local project instead of the bundled demos, install that project's dependencies first too:
-
-```bash
-cd /absolute/path/to/your-app
-pnpm install
-```
-
-## Try the basic flow
-
-1. Open `http://localhost:3001`.
-2. In the Preview panel, enable pick mode.
-3. Click an element in the page.
-4. In Agent Chat, ask for a small change, for example:
-
-   ```txt
-   Make this title friendlier and slightly larger.
-   ```
-
-5. Wait for the agent response.
-6. Watch the preview hot reload.
-7. Review changed files in the Changes panel.
-8. If needed, click the revert button next to a file to roll it back.
-
-## Use PickFix with your own project
-
-From the PickFix repo, run:
-
-```bash
-pnpm pickfix -- --project /absolute/path/to/your-app --dev 'pnpm dev --port 5678' --port 5678
-```
-
-The `--dev` command should start your app on the same port that you pass to `--port`. For example:
-
-Nuxt:
-
-```bash
-pnpm pickfix -- --project /Users/me/projects/my-nuxt-app --dev 'pnpm dev --port 5678' --port 5678
-```
-
-Next.js:
-
-```bash
-pnpm pickfix -- --project /Users/me/projects/my-next-app --dev 'pnpm exec next dev -p 5678' --port 5678
-```
-
-PickFix will start three processes in order:
-
-1. Your target app on the port you pass with `--port`.
-2. PickFix proxy on `4000`.
-3. PickFix web UI on `3001`.
-
-Then open:
-
-```txt
-http://localhost:3001
-```
-
-### If your dev server is already running
-
-Use `--no-dev` and point PickFix at the existing target URL:
-
-```bash
-pnpm pickfix -- --project /absolute/path/to/your-app --target http://localhost:5173 --no-dev
-```
-
-### Custom ports
-
-```bash
-pnpm pickfix -- \
-  --project /absolute/path/to/your-app \
-  --dev 'pnpm dev --port 5678' \
-  --port 5678 \
-  --proxy-port 4100 \
-  --web-port 3100
-```
-
-## Development commands
-
-```bash
 # Typecheck all packages
 pnpm typecheck
 
@@ -226,9 +176,6 @@ pnpm test
 
 # Full validation
 pnpm check
-
-# Run only web tests
-pnpm --filter @pickfix/web test
 ```
 
 ## Monorepo structure
@@ -248,8 +195,8 @@ pickfix/
 
 ## Current limitations
 
-- The agent quality depends on the selected element metadata and the clarity of your prompt.
-- PickFix currently focuses on local development, not remote deployments.
+- Agent quality depends on selected element metadata and prompt clarity.
+- PickFix focuses on local development, not remote deployments.
 - The Changes panel uses Git status/diff, so the target project should be inside a Git repository for the best experience.
 - Branch/worktree management and source annotation are planned but not implemented yet.
 
