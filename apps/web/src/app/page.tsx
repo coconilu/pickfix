@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "@/providers/session";
 import { ChatPanel } from "@/components/ChatPanel";
+import { ClaudeStatus } from "@/components/ClaudeStatus";
 import { PreviewPanel } from "@/components/PreviewPanel";
 import { StatusPanel } from "@/components/StatusPanel";
 
@@ -17,6 +18,7 @@ export default function Home() {
             <span className="app-tagline">Point, pick, fix</span>
           </div>
           <div className="app-header-right">
+            <ClaudeStatus />
             <span className="app-env-badge">MVP</span>
           </div>
         </header>

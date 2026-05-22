@@ -13,6 +13,23 @@ export interface AgentContext {
   projectFiles: Record<string, string>;
 }
 
+export interface AgentStatus {
+  available: boolean;
+  bin: string;
+  version?: string;
+  error?: string;
+  checkedAt: number;
+}
+
+export async function fetchAgentStatus(): Promise<AgentStatus> {
+  const res = await fetch("/api/agent/status", { cache: "no-store" });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(detail || `Agent status check failed with ${res.status}`);
+  }
+  return res.json();
+}
+
 /**
  * Stream the agent's response for a user message with optional picked element.
  */
