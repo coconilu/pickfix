@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useSessionState, useSessionActions } from "@/providers/session";
 import { PickedElement } from "./PickedElement";
 import { streamAgentResponse } from "@/lib/agent";
@@ -72,6 +72,7 @@ export function ChatPanel() {
     useSessionActions();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [inputValue, setInputValue] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Track latest messages via ref to avoid stale closures
   const messagesRef = useRef(messages);
@@ -89,6 +90,7 @@ export function ChatPanel() {
 
     const userText = input.value.trim();
     input.value = "";
+    setInputValue("");
     input.style.height = "auto";
 
     // Use ref to get latest messages (avoids stale closure)
@@ -179,13 +181,15 @@ export function ChatPanel() {
               : "Pick an element, then describe changes... (Enter to send)"
           }
           rows={2}
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
           onKeyDown={handleKeyDown}
           disabled={isStreaming}
         />
         <button
           className="chat-send-btn"
           onClick={handleSend}
-          disabled={isStreaming || !inputRef.current?.value.trim()}
+          disabled={isStreaming || !inputValue.trim()}
         >
           {isStreaming ? "..." : "Send"}
         </button>
