@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useSessionState, useSessionActions } from "@/providers/session";
 import { PickedElement } from "./PickedElement";
+import { SessionManager } from "./SessionManager";
 import { streamAgentResponse } from "@/lib/agent";
 import type { ChatMessage, ElementMeta } from "@/lib/bridge-protocol";
 
@@ -103,7 +104,7 @@ export function ChatPanel() {
   const lastUserPrompt = lastUserMessage?.content ?? "";
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = useCallback(async () => {
@@ -171,12 +172,15 @@ export function ChatPanel() {
   return (
     <div className="chat-panel">
       <div className="chat-panel-header">
-        <h2 className="chat-panel-title">Agent Chat</h2>
-        <span className="chat-panel-badge">
-          {pickedElements.length > 0
-            ? `${pickedElements.length} element${pickedElements.length > 1 ? "s" : ""} picked`
-            : "No element picked"}
-        </span>
+        <div className="chat-panel-header-main">
+          <h2 className="chat-panel-title">Agent Chat</h2>
+          <span className="chat-panel-badge">
+            {pickedElements.length > 0
+              ? `${pickedElements.length} element${pickedElements.length > 1 ? "s" : ""} picked`
+              : "No element picked"}
+          </span>
+        </div>
+        <SessionManager />
       </div>
 
       {pickedElements.length > 0 && (
