@@ -1,0 +1,68 @@
+name: RFC / Proposal
+description: Discuss a larger design change before implementation.
+title: "rfc: "
+labels: ["type: rfc", "status: needs discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for changes with architectural impact, significant UX implications, or unclear trade-offs.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What background should reviewers know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: goals
+    attributes:
+      label: Goals and non-goals
+      value: |
+        Goals:
+        -
+
+        Non-goals:
+        -
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed design
+      description: Explain the user flow, architecture, APIs, or data flow involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Trade-offs and risks
+      description: What could go wrong? What gets harder?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: packages
+    attributes:
+      label: Affected packages
+      multiple: true
+      options:
+        - apps/web
+        - packages/bridge
+        - packages/proxy
+        - packages/cli
+        - examples
+        - docs
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout plan
+      description: How should this be implemented safely and incrementally?

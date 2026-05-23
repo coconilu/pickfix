@@ -202,6 +202,8 @@ pickfix/
 
 ## Roadmap
 
+See [ROADMAP.md](./ROADMAP.md) for the project roadmap and candidate RFCs.
+
 - [x] Live preview through proxy
 - [x] Runtime bridge injection
 - [x] Element picking
@@ -213,6 +215,10 @@ pickfix/
 - [ ] Branch/worktree workflow
 - [ ] Commit/PR flow
 - [ ] More framework adapters and examples
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the issue workflow, PR guidelines, and recommended labels.
 
 ## License
 
